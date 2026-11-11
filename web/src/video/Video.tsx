@@ -228,7 +228,7 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
   return (
     <AbsoluteFill style={{ background: bg, transform: `translate(${x + sx}px, ${y + sy}px) scale(${zoom})`, filter: `blur(${blur}px)` }}>
       {t.style === '2d' && <Shapes2D t={t} i={i} />}
-      {prop && <Stage3D recipe={prop} len={len} i={i} ink={ink} />}
+      {prop && <Stage3D recipe={prop} len={len} i={i} />}
       <AbsoluteFill style={{
         padding: pad, gap: 70,
         flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'stretch' : 'center',

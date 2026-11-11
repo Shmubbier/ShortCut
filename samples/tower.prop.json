@@ -1,0 +1,13 @@
+{
+  "name": "stone_tower", "title": "TOWER",
+  "root": { "op": "union", "children": [
+    { "op": "cylinder", "r": 0.9, "r2": 0.75, "h": 2.6, "seg": 10, "at": [0, 1.3, 0], "color": "#b9ad97" },
+    { "op": "cylinder", "r": 1.0, "h": 0.3, "seg": 10, "at": [0, 2.75, 0], "color": "#a39680" },
+    { "op": "array", "count": 8, "step": [0, 0, 0], "stepRot": [0, 45, 0],
+      "children": [ { "op": "box", "size": [0.32, 0.36, 0.3], "at": [0.85, 3.08, 0], "color": "#a39680" } ] },
+    { "op": "box", "size": [0.5, 0.8, 0.14], "at": [0, 0.4, 0.88], "color": "#4a3a2a" },
+    { "op": "box", "size": [0.22, 0.4, 0.14], "at": [0, 1.8, 0.82], "color": "#2b2b2b" },
+    { "op": "capsule", "r": 0.04, "from": [0, 2.9, 0], "to": [0, 4.1, 0], "color": "#6b4f33" },
+    { "op": "extrude", "points": [[0, 0], [0.7, 0.18], [0, 0.36]], "h": 0.03, "at": [0.04, 3.72, 0], "color": "#e8432e" }
+  ] }
+}

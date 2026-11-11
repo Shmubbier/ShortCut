@@ -30,6 +30,8 @@ assert.deepEqual(b({ op: 'union', color: '#123456', children: [{ op: 'box', size
 assert.ok(Math.abs(box(b({ op: 'mirror', axis: 'z', children: [{ op: 'sphere', r: 0.1, at: [0, 0, 1] }] })).min.z + 1.1) < 1e-3, 'mirror across z')
 assert.ok(Math.abs(box(b({ op: 'array', count: 4, step: [1, 0, 0], children: [{ op: 'box', size: [0.5, 0.5, 0.5] }] })).max.x - 3.25) < 1e-4, 'array steps')
 assert.ok(b({ op: 'ref', part: 'leg' }, { leg: { op: 'capsule', r: 0.1, from: [0, 0, 0], to: [0, 1, 0] } }).tris > 0)
+// A clockwise outline (the AI's common slip) must not empty the whole union it sits in.
+assert.ok(b({ op: 'union', children: [{ op: 'box', size: [1, 1, 1] }, { op: 'extrude', points: [[0, 0.1], [0.08, 0], [0, -0.1], [-0.08, 0]], h: 0.03, at: [2, 0, 0] }] }).tris > 12, 'clockwise extrude')
 
 // bad recipes fail with the path to the bad node, so Claude can fix it
 const err = (root: unknown) => assert.throws(() => b(root as Node), RecipeError)

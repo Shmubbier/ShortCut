@@ -17,6 +17,10 @@ import json
 import mimetypes
 import os
 import re
+import shutil
+import subprocess
+import tempfile
+import time
 import urllib.request
 import uuid
 from html.parser import HTMLParser
@@ -110,7 +114,61 @@ def research(topic: str) -> str:
         return ""
 
 
-def ask(prompt: str, schema):
+def claude_code_bin() -> str | None:
+    """The Claude Code CLI: CLAUDE_CODE_BIN, `claude` on PATH, or the copy bundled with the Claude desktop app."""
+    found = os.environ.get("CLAUDE_CODE_BIN") or shutil.which("claude")
+    if found:
+        return found
+    bundled = sorted(Path(os.environ.get("LOCALAPPDATA", "")).glob("Claude-Data/*/claude-code/*/*/claude.exe"),
+                     key=lambda p: p.stat().st_mtime)
+    return str(bundled[-1]) if bundled else None
+
+
+_cli_ok: tuple[float, bool] = (0.0, False)
+
+
+def backend() -> str | None:
+    """'api' (ANTHROPIC_API_KEY), 'cli' (signed-in Claude Code), or None for demo mode."""
+    global _cli_ok
+    load_env()
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return "api"
+    if time.time() - _cli_ok[0] > 60:  # `auth status` takes ~1 s; re-check at most once a minute
+        b = claude_code_bin()
+        ok = False
+        if b:
+            try:
+                r = subprocess.run([b, "auth", "status"], capture_output=True, text=True, timeout=30)
+                ok = json.loads(r.stdout or "{}").get("loggedIn") is True
+            except Exception as e:
+                print("claude code check failed:", repr(e)[:200])
+        _cli_ok = (time.time(), ok)
+    return "cli" if _cli_ok[1] else None
+
+
+def ask_cli(prompt: str, schema, research: bool):
+    """Same prompt and schema as the API path, answered by headless Claude Code on the user's own sign-in.
+    Runs in an empty temp folder with no tools except web research, so it can't touch this project."""
+    args = [claude_code_bin(), "-p", "--output-format", "json", "--no-session-persistence",
+            "--json-schema", json.dumps(schema.model_json_schema())]
+    args += ["--allowed-tools", "WebSearch", "WebFetch"] if research else ["--disallowed-tools", "WebSearch", "WebFetch"]
+    if research:
+        prompt += "\n\nFirst use web search to find current, concrete facts and numbers on the topic, then answer."
+    with tempfile.TemporaryDirectory() as tmp:  # prompt goes on stdin: 3D prompts exceed Windows' command-line limit
+        r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=600, cwd=tmp)
+    try:
+        d = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(f"Claude Code failed: {(r.stderr or r.stdout)[:300]}")
+    if d.get("is_error"):
+        raise RuntimeError(f"Claude Code: {d.get('result')}")
+    out = d.get("structured_output")
+    return schema.model_validate(out) if out is not None else schema.model_validate_json(d.get("result", ""))
+
+
+def ask(prompt: str, schema, research: bool = False):
+    if backend() == "cli":
+        return ask_cli(prompt, schema, research)
     import anthropic
 
     # Streamed: 3D recipes make long outputs, and a non-streamed request that long can hit HTTP timeouts.
@@ -184,14 +242,17 @@ def load_env() -> None:
 
 
 def create(body: dict) -> dict:
-    load_env()
     topic = body.get("topic", "").strip()
     if not topic:
         raise ValueError("Describe what the video is about")
     meta = {"style": body.get("style", "editorial"), "pace": body.get("pace", "punchy"), "aspect": body.get("aspect", "9:16")}
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    mode = backend()
+    if not mode:
+        sample = find_sample(topic)
+        if sample:  # the sample brings its own style; the user's chosen format still applies
+            return {**meta, **sample, "aspect": meta["aspect"], "research": ""}
         return {**demo_plan(topic, body.get("assets", []), meta["style"]), **meta, "research": ""}
-    notes = research(topic)
+    notes = research(topic) if mode == "api" else ""  # the CLI path researches with Claude Code's own web search
     fmt = "vertical short-form reel" if meta["aspect"] in ("9:16", "4:5") else "horizontal video"
     s = ask(f"""Plan a {meta['pace']}-paced {fmt} ({meta['aspect']}, 6-8 segments) in the {meta['style']} visual style.
 Topic / brief: {topic}
@@ -202,16 +263,15 @@ Research notes (may be empty; prefer concrete facts and numbers from here):
 {EDITING_GUIDE}
 {bucket_text(body.get('assets', []))}
 {style_text(meta['style'])}
-Hook in the first segment, payoff in the last. Headlines short and punchy. No hashtags, no emojis.""", Script)
+Hook in the first segment, payoff in the last. Headlines short and punchy. No hashtags, no emojis.""", Script, research=True)
     return {"title": s.title, **meta, "scenes": [to_scene(x) for x in s.scenes], "research": notes, "note": s.note}
 
 
 def edit(body: dict) -> dict:
-    load_env()
     plan, i, instr = body["plan"], body.get("index"), body.get("instruction", "").strip()
     if not instr:
         raise ValueError("Type what to change")
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not backend():
         return demo_edit(plan, i, instr)
     common = f"{EDITING_GUIDE}\n{bucket_text(body.get('assets', []))}\n{style_text(plan.get('style', 'editorial'))}"
     if i is not None:
@@ -241,12 +301,35 @@ Add, remove or reorder segments only if asked.""", Script)
     return {"plan": {**plan, "title": s.title, "scenes": scenes}, "note": s.note}
 
 
+SAMPLES = ROOT / "samples"
+
+
+def find_sample(topic: str) -> dict | None:
+    """Handmade sample videos for demo mode (samples/*.json), matched by keyword. Props come from `prop_file`."""
+    t = topic.lower()
+    for f in sorted(SAMPLES.glob("*.json")):
+        if f.name.endswith(".prop.json"):
+            continue
+        s = json.loads(f.read_text(encoding="utf-8"))
+        if not any(k in t for k in s.get("keywords", [])):
+            continue
+        scenes = []
+        for sc in s["scenes"]:
+            sc = dict(sc)
+            pf = sc.pop("prop_file", None)
+            prop = json.loads((SAMPLES / pf).resolve().read_text(encoding="utf-8")) if pf else None
+            scenes.append({"asset": "", "audio": None, "words": [], **sc, "prop": prop})
+        return {**{k: v for k, v in s.items() if k != "keywords"}, "scenes": scenes,
+                "note": f"Demo mode: loaded the handmade “{s['title']}” sample. Hit “Voice all segments” for narration + captions."}
+    return None
+
+
 def demo_plan(topic: str, assets: list, style: str) -> dict:
     """No API key: placeholder content so the UI, renderer and voice pipeline still work (3D gets the example prop)."""
     rows = [("title", "cut", []), ("fact", "whip", ["highlight"]), ("stat", "zoom", ["shake"]),
             ("fact", "slide", ["typewriter"]), ("quote", "whip", ["vignette"]), ("outro", "flash", ["punch"])]
     pics = iter(a["url"] for a in assets)
-    return {"title": topic, "note": "Demo mode: set ANTHROPIC_API_KEY for real content.", "scenes": [
+    return {"title": topic, "note": "Demo mode: add ANTHROPIC_API_KEY to .env, or sign in to Claude Code (claude auth login), for real content.", "scenes": [
         {"id": uuid.uuid4().hex[:8], "kind": k, "headline": f"{k} about {topic}"[:48], "sub": "Placeholder text, demo mode",
          "value": "42%" if k == "stat" else "", "transition": t, "effects": fx,
          "asset": next(pics, "") if k == "fact" else "",
@@ -257,7 +340,7 @@ def demo_plan(topic: str, assets: list, style: str) -> dict:
 
 def demo_edit(plan: dict, i, instr: str) -> dict:
     if i is None:
-        return {"plan": plan, "note": "Demo mode: whole-video edits need ANTHROPIC_API_KEY."}
+        return {"plan": plan, "note": "Demo mode: whole-video edits need an API key or a Claude Code sign-in."}
     scenes = [*plan["scenes"]]
     scenes[i] = {**scenes[i], "headline": instr[:48]}
     return {"plan": {**plan, "scenes": scenes}, "note": f"Demo mode: set segment {i + 1}'s headline to your text."}

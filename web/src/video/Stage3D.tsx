@@ -65,16 +65,16 @@ const Rig = ({ center, size, follow, len, i }: { center: THREE.Vector3; size: nu
   const dir = i % 2 ? -1 : 1
   const a = interpolate(frame, [0, len], [-28 * dir, 28 * dir], { easing: Easing.inOut(Easing.cubic) }) * DEG
   const tall = height >= width
-  const r = size * (tall ? 3.4 : 2.6) + 1.5 // far enough that the whole prop fits its half of the frame
+  const r = size * (tall ? 3.7 : 2.6) + 1.5 // far enough that the whole prop, tall ones included, fits its half of the frame
   const t = center.clone().add(new THREE.Vector3(...follow))
   cam.position.set(t.x + r * Math.sin(a), t.y + size * 0.45, t.z + r * Math.cos(a))
   cam.lookAt(t)
-  cam.setViewOffset(width, height, tall ? 0 : -width * 0.22, tall ? -height * 0.24 : 0, width, height)
+  cam.setViewOffset(width, height, tall ? 0 : -width * 0.22, tall ? -height * 0.2 : 0, width, height)
   cam.updateProjectionMatrix()
   return null
 }
 
-export const Stage3D = ({ recipe, len, i, ink }: { recipe: Recipe; len: number; i: number; ink: string }) => {
+export const Stage3D = ({ recipe, len, i }: { recipe: Recipe; len: number; i: number }) => {
   const w = useManifold()
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
@@ -100,7 +100,7 @@ export const Stage3D = ({ recipe, len, i, ink }: { recipe: Recipe; len: number; 
         shadow-camera-left={-shadowR} shadow-camera-right={shadowR} shadow-camera-top={shadowR} shadow-camera-bottom={-shadowR} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[80, 80]} />
-        <shadowMaterial opacity={0.2} color={ink} transparent />
+        <shadowMaterial opacity={0.22} color="#000" transparent />
       </mesh>
       {ground?.geo && <mesh geometry={ground.geo} material={mats.get('_ground')} castShadow receiveShadow />}
       <group position={offset} rotation={[0, travels ? 0 : -25 * DEG, 0]}>

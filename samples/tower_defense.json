@@ -1,0 +1,46 @@
+{
+  "keywords": ["tower defense", "tower defence", "td game", "game", "games", "clash", "plants vs"],
+  "title": "Tower Defense in 40 Seconds",
+  "style": "3d",
+  "pace": "punchy",
+  "aspect": "9:16",
+  "voice": "en-US-AndrewNeural",
+  "scenes": [
+    {
+      "id": "td01", "kind": "title", "headline": "They just keep coming", "sub": "Tower defense, explained in 40 seconds",
+      "value": "", "transition": "cut", "effects": ["shake"], "prop_file": "../bench3d/modelgen/props/boar_rider.json",
+      "purpose": "Hook: the enemy charging in.",
+      "voiceover": "Wave after wave, they march toward your base. Your only job? Stop them. Welcome to tower defense."
+    },
+    {
+      "id": "td02", "kind": "fact", "headline": "Build. Wait. Defend.", "sub": "Place towers along the enemy's path",
+      "value": "", "transition": "whip", "effects": ["highlight"], "prop_file": "tower.prop.json",
+      "purpose": "Explain the core loop.",
+      "voiceover": "The loop is simple. Spend coins on towers, place them along the path, and watch them fire as each wave walks past."
+    },
+    {
+      "id": "td03", "kind": "stat", "headline": "Rampart sets the stage", "sub": "An Atari arcade game often called the genre's ancestor",
+      "value": "1990", "transition": "zoom", "effects": ["punch"],
+      "purpose": "Origin of the genre.",
+      "voiceover": "The roots go back to 1990, when Atari's arcade game Rampart had players build walls and cannons to fend off attacking ships."
+    },
+    {
+      "id": "td04", "kind": "fact", "headline": "Flash games made it a craze", "sub": "Desktop Tower Defense let you build the maze yourself",
+      "value": "", "transition": "slide", "effects": ["typewriter"],
+      "purpose": "The breakout moment.",
+      "voiceover": "In 2007, the browser game Desktop Tower Defense let players build the maze themselves, and suddenly everyone was playing."
+    },
+    {
+      "id": "td05", "kind": "stat", "headline": "Plants vs. Zombies goes mainstream", "sub": "Sunflowers, peashooters and a lawn to protect",
+      "value": "2009", "transition": "whip", "effects": ["invert"],
+      "purpose": "The mainstream hit everyone knows.",
+      "voiceover": "Then in 2009, Plants versus Zombies put the genre on every phone and laptop, one peashooter at a time."
+    },
+    {
+      "id": "td06", "kind": "outro", "headline": "Hold the line", "sub": "Pick your towers wisely",
+      "value": "", "transition": "flash", "effects": ["shake"], "prop_file": "tower.prop.json",
+      "purpose": "Payoff with the tower standing strong.",
+      "voiceover": "Smart placement beats brute force. Pick your towers wisely, and hold the line."
+    }
+  ]
+}

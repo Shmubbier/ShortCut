@@ -56,10 +56,14 @@ export function buildRecipe(w: Wasm, recipe: Recipe) {
   }
   const poly = (path: string, v: unknown) => {
     if (!Array.isArray(v) || v.length < 3 || v.length > 200) fail(path, 'must be a list of 3-200 [x, y] points')
-    return (v as unknown[]).map((p, i) => {
+    const pts = (v as unknown[]).map((p, i) => {
       if (!Array.isArray(p) || p.length !== 2) fail(`${path}[${i}]`, 'must be [x, y]')
       return [num(`${path}[${i}][0]`, (p as number[])[0], -MAX.size, MAX.size), num(`${path}[${i}][1]`, (p as number[])[1], -MAX.size, MAX.size)] as [number, number]
     })
+    // Manifold treats a clockwise outline as negative (invalid), and one invalid part empties a whole union,
+    // so accept either winding: reverse clockwise outlines (negative shoelace area).
+    const area = pts.reduce((a, [x, y], i) => { const [x2, y2] = pts[(i + 1) % pts.length]; return a + x * y2 - x2 * y }, 0)
+    return area < 0 ? pts.reverse() : pts
   }
   const paint = (m: M, color: string) => { const o = keep(m.asOriginal()); colorOf.set(o.originalID(), color); return o }
   const yUp = (m: M) => keep(m.rotate([-90, 0, 0])) // Manifold builds cylinders/revolves along z; recipes use y
@@ -193,6 +197,8 @@ export function buildRecipe(w: Wasm, recipe: Recipe) {
     pieces[0].m = build(recipe.root, 'root', '#9a9a9a', 0, { piece: 'root' }) ?? undefined
     const out: Piece[] = pieces.map(({ m, ...p }) => (m ? { ...p, ...toGeometry(m) } : { ...p, colors: [] }))
     const tris = out.reduce((t, p) => t + (p.geo ? p.geo.attributes.position.count / 3 : 0), 0)
+    // An empty build is a broken recipe, not an invisible prop: surface it so "Fix with AI" can repair it.
+    if (!tris) fail('root', 'the recipe built nothing visible (check that subtract/intersect parts overlap and outlines are simple shapes)')
     return { pieces: out, ms: performance.now() - t0, tris, nodes }
   } finally {
     for (const m of new Set(made)) m.delete()
