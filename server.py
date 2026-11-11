@@ -14,6 +14,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import urllib.request
@@ -22,7 +23,7 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 from pydantic import BaseModel
 
@@ -421,9 +422,21 @@ ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/ass
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != "/api/assets":
-            return self.send_error(404)
-        self.reply(list_assets(), 200)
+        if self.path == "/api/assets":
+            return self.reply(list_assets(), 200)
+        # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
+        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA)):
+            if self.path.startswith(prefix):
+                p = folder / Path(unquote(urlparse(self.path).path)).name  # .name keeps us inside the folder
+                if not p.is_file():
+                    return self.send_error(404)
+                data = p.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                return self.wfile.write(data)
+        self.send_error(404)
 
     def do_POST(self):
         fn = ROUTES.get(self.path)
