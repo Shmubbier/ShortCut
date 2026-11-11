@@ -6,7 +6,7 @@ import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, EFFECTS, FPS, Main, planDuration, sceneStarts, TRANSITIONS, type Aspect, type Effect, type Plan, type SceneData, type Transition } from './video/Video'
 import './App.css'
 
-type Asset = { url: string; name: string }
+type Asset = { url: string; name: string; source?: string }
 type Item = { type: 'transition'; name: Transition } | { type: 'effect'; name: Effect } | { type: 'asset'; url: string; name: string }
 type Msg = { who: 'you' | 'ai'; text: string; scope: string }
 
@@ -38,6 +38,8 @@ export default function App() {
   const [aspect, setAspect] = useState<Aspect>('9:16')
   const [assets, setAssets] = useState<Asset[]>([])
   const [scrapeUrl, setScrapeUrl] = useState('')
+  const [findQuery, setFindQuery] = useState('')
+  const [autoImages, setAutoImages] = useState(true)
   const [assetMsg, setAssetMsg] = useState('')
   const player = useRef<PlayerRef>(null)
   const planRef = useRef(plan)
@@ -91,14 +93,27 @@ export default function App() {
   async function prompt(text: string, index = sel) {
     if (!text || busy) return
     const s = index !== null && plan ? `Segment ${index + 1} · ${plan.scenes[index].kind}` : scope
-    setBusy('ai')
     say('you', text, s)
     try {
       if (!plan) {
-        const p = await api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets })
+        let bucket = assets
+        if (autoImages) { // fill the bucket with topic images first, so the AI can place them in segments
+          setBusy('find-auto')
+          try {
+            const found: Asset[] = await api('/api/assets/find', { query: text, limit: 6 })
+            bucket = [...assets, ...found]
+            setAssets(bucket)
+            say('ai', `Found ${found.length} images for “${text}” (ScrapeGraphAI web search).`, s)
+          } catch (e) {
+            say('ai', `${errText(e)} · carrying on without new images.`, s)
+          }
+        }
+        setBusy('ai')
+        const p = await api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets: bucket })
         setPlan(p)
         say('ai', p.note ?? `Made ${p.scenes.length} segments.`, s)
       } else {
+        setBusy('ai')
         const r = await api('/api/edit', { plan, index, instruction: text, assets })
         setPlan(r.plan)
         say('ai', r.note, s)
@@ -150,6 +165,23 @@ export default function App() {
     }
   }
 
+  // ScrapeGraphAI web search -> relevant images in the bucket; with assignTo, the best one goes on that segment.
+  async function findImages(query: string, assignTo: number | null = null) {
+    if (!query.trim() || busy) return
+    setBusy(assignTo === null ? 'find' : `find-${assignTo}`)
+    setAssetMsg(`Searching the web for “${query}”…`)
+    try {
+      const found: Asset[] = await api('/api/assets/find', { query, limit: assignTo === null ? 8 : 4 })
+      setAssets((a) => [...a, ...found])
+      setAssetMsg(`Added ${found.length} images`)
+      if (assignTo !== null && found[0]) patchScene(assignTo, (s) => ({ ...s, asset: found[0].url }))
+    } catch (e) {
+      setAssetMsg(errText(e))
+    } finally {
+      setBusy('')
+    }
+  }
+
   async function removeAsset(url: string) {
     await api('/api/assets/delete', { url }).catch(() => {})
     setAssets((a) => a.filter((x) => x.url !== url))
@@ -191,6 +223,10 @@ export default function App() {
           {tab === 'asset' ? (
             <>
               <div className="asset-add">
+                <form onSubmit={(e) => { e.preventDefault(); findImages(findQuery || plan?.title || '') }}>
+                  <input value={findQuery} onChange={(e) => setFindQuery(e.target.value)} placeholder={plan ? `Find images: ${plan.title}` : 'Find images for a topic'} aria-label="Topic to find images for" />
+                  <button type="submit" disabled={!!busy || !(findQuery || plan?.title)}>{busy === 'find' ? 'Searching…' : 'Find'}</button>
+                </form>
                 <label className="upload">Upload<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} hidden /></label>
                 <form onSubmit={(e) => { e.preventDefault(); scrape() }}>
                   <input value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} placeholder="Paste a page URL to grab its images" aria-label="Page URL to scrape images from" />
@@ -203,13 +239,13 @@ export default function App() {
                 onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
               >
                 {assets.map((a) => (
-                  <div key={a.url} className="fx asset" {...tileProps({ type: 'asset', ...a })}>
-                    <img src={a.url} alt={a.name} />
+                  <div key={a.url} className="fx asset" {...tileProps({ type: 'asset', url: a.url, name: a.name })}>
+                    <img src={a.url} alt={a.name} title={a.source ? `From ${a.source}` : a.name} />
                     <span>{a.name}</span>
                     <button className="x del" onClick={(e) => { e.stopPropagation(); removeAsset(a.url) }} aria-label={`Delete ${a.name}`}>×</button>
                   </div>
                 ))}
-                {!assets.length && <p className="tip span">Drop images here, upload, or grab them from a web page. The AI picks from this bucket.</p>}
+                {!assets.length && <p className="tip span">Find images for a topic, drop or upload your own, or grab them from a page. The AI picks from this bucket. Found images are other people's work: check you can use them.</p>}
               </div>
               {assetMsg && <p className="tip">{assetMsg}</p>}
             </>
@@ -235,6 +271,7 @@ export default function App() {
                 {m.text}
               </div>
             ))}
+            {busy === 'find-auto' && <div className="msg ai"><small>AI</small>Finding images on the web…</div>}
             {busy === 'ai' && <div className="msg ai"><small>AI</small>{plan ? 'Editing…' : 'Researching + writing…'}</div>}
           </div>
           <div className="composer">
@@ -249,6 +286,9 @@ export default function App() {
               placeholder={!plan ? 'e.g. 45s explainer on why Filipinos love ube' : sel !== null ? 'e.g. make this punchier, use the jeepney photo' : 'e.g. make the whole thing more dramatic'}
               rows={3}
             />
+            {!plan && (
+              <label className="check-row"><input type="checkbox" checked={autoImages} onChange={(e) => setAutoImages(e.target.checked)} /> Find topic images first</label>
+            )}
             <button onClick={send} disabled={!!busy || !input.trim()}>{plan ? 'Apply' : 'Generate'}</button>
           </div>
         </section>
@@ -282,6 +322,7 @@ export default function App() {
               onDropItem={(i, json) => { try { apply(i, JSON.parse(json)) } catch { /* not one of our tiles */ } }}
               onRemoveEffect={(i, e) => patchScene(i, (s) => ({ ...s, effects: s.effects.filter((x) => x !== e) }))}
               onRemoveAsset={(i) => patchScene(i, (s) => ({ ...s, asset: '' }))}
+              onImportance={(i, lv) => patchScene(i, (s) => ({ ...s, importance: lv }))}
             />
           </>
         ) : (
@@ -291,7 +332,8 @@ export default function App() {
 
       {plan && (
         <Inspector plan={plan} sel={sel} setSel={setSel} change={change} snapshot={snapshot} voice={voice} busy={busy}
-          fixProp={(i, err) => prompt(`The 3D prop failed to build with this error: ${err}. Fix the recipe, keep the same idea.`, i)} />
+          fixProp={(i, err) => prompt(`The 3D prop failed to build with this error: ${err}. Fix the recipe, keep the same idea.`, i)}
+          findImages={findImages} />
       )}
     </div>
   )

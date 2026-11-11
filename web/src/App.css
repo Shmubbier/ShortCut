@@ -134,3 +134,26 @@ header select, .ghost { border: 1.5px solid var(--ink); background: #fff8ef; bor
 .oval img { width: 18px; height: 18px; object-fit: cover; border-radius: 50%; }
 .oval.dragging, .strings.dragging { transition: none; }
 .node { overflow: hidden; }
+
+/* Segment timing meter on each card: seconds, relative bar (colour = importance), importance dots */
+.meter { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 10px; font-weight: 800; }
+.meter .secs { min-width: 30px; }
+.meter .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--paper2); overflow: hidden; }
+.meter .bar i { display: block; height: 100%; border-radius: 3px; transition: width .2s; }
+.meter.imp1 .bar i { background: #9a958c; }
+.meter.imp2 .bar i { background: var(--ink); }
+.meter.imp3 .bar i { background: var(--accent); }
+.meter .pips { display: flex; gap: 3px; }
+.meter .pips button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 1.5px solid var(--ink); background: transparent; cursor: pointer; }
+.meter .pips button.on { background: var(--ink); }
+.meter.imp3 .pips button.on { background: var(--accent); border-color: var(--accent); }
+.imp-switch { display: flex; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
+.imp-switch button { flex: 1; border: 0 !important; border-radius: 0 !important; background: #fff8ef !important; color: var(--ink) !important; padding: 6px 4px !important; font-size: 12px !important; }
+.imp-switch button + button { border-left: 1.5px solid var(--ink) !important; }
+.imp-switch button.on { background: var(--ink) !important; color: var(--paper) !important; }
+.seglist .bar { width: 48px; height: 5px; border-radius: 3px; background: var(--paper2); overflow: hidden; }
+.seglist .bar i { display: block; height: 100%; background: var(--ink); }
+.seglist .bar i.imp3 { background: var(--accent); }
+.seglist .bar i.imp1 { background: #9a958c; }
+.check-row { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.seg-img { width: 100%; max-height: 140px; object-fit: cover; border: 1.5px solid var(--ink); border-radius: 8px; }

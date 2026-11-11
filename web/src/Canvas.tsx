@@ -1,6 +1,6 @@
 import { Thumbnail } from '@remotion/player'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { dims, EFFECTS, FPS, Main, planDuration, sceneStarts, TRANSITIONS, type Effect, type Plan } from './video/Video'
+import { dims, EFFECTS, FPS, IMPORTANCE, Main, planDuration, sceneStarts, timing, TRANSITIONS, type Effect, type Importance, type Plan } from './video/Video'
 
 type Props = {
   plan: Plan
@@ -11,6 +11,7 @@ type Props = {
   onDropItem: (i: number, json: string) => void
   onRemoveEffect: (i: number, e: Effect) => void
   onRemoveAsset: (i: number) => void
+  onImportance: (i: number, level: Importance) => void
 }
 type View = { x: number; y: number; z: number }
 type Gesture =
@@ -25,7 +26,9 @@ export function Canvas(props: Props) {
   const nodeW = h > w ? 160 : 230
   const SLOT = nodeW + 110
   const thumbH = ((nodeW - 20) * h) / w
-  const cardH = 34 + thumbH + 50 // header + thumbnail + two-line headline (fixed, so the strings know where cards end)
+  const cardH = 34 + thumbH + 50 + 26 // header + thumbnail + two-line headline + timing row (fixed, so the strings know where cards end)
+  const lens = plan.scenes.map((s) => timing(s, plan.pace))
+  const longest = Math.max(...lens.map((l) => l.frames), 1)
   const wireY = 34 + thumbH / 2 // middle of the thumbnail
   const n = plan.scenes.length
   const starts = sceneStarts(plan)
@@ -180,6 +183,17 @@ export function Canvas(props: Props) {
               <Thumbnail component={Main} inputProps={plan} compositionWidth={w} compositionHeight={h}
                 frameToDisplay={starts[i] + 30} durationInFrames={planDuration(plan)} fps={FPS} style={{ width: '100%', pointerEvents: 'none' }} />
               <p>{s.value && <b>{s.value} </b>}{s.headline}</p>
+              {/* Timing: length vs the longest segment, coloured by importance; dots set importance */}
+              <div className={`meter imp${s.importance ?? 2}`} title={`${(lens[i].frames / FPS).toFixed(1)}s · ${lens[i].source === 'voice' ? 'from the voiceover' : 'from script length'} · ${IMPORTANCE[s.importance ?? 2].label}`}>
+                <span className="secs">{(lens[i].frames / FPS).toFixed(1)}s</span>
+                <span className="bar"><i style={{ width: `${(lens[i].frames / longest) * 100}%` }} /></span>
+                <span className="pips" onPointerDown={(e) => e.stopPropagation()}>
+                  {([1, 2, 3] as Importance[]).map((lv) => (
+                    <button key={lv} className={lv <= (s.importance ?? 2) ? 'on' : ''} onClick={() => props.onImportance(i, lv)}
+                      aria-label={`Importance: ${IMPORTANCE[lv].label}`} title={IMPORTANCE[lv].label} />
+                  ))}
+                </span>
+              </div>
             </div>
             </Fragment>
           )

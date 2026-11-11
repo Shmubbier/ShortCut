@@ -3,3 +3,4 @@ pydantic
 scrapegraphai
 edge-tts
 faster-whisper
+ddgs

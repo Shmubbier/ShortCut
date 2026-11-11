@@ -11,7 +11,7 @@ export type Word = { text: string; start: number; end: number } // seconds from 
 export type SceneData = {
   id: string; kind: Kind; headline: string; sub: string; value: string; transition: Transition; effects: Effect[]
   asset?: string; prop?: Recipe | null
-  purpose?: string; voiceover?: string; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
+  purpose?: string; voiceover?: string; importance?: Importance; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
 }
 export type Plan = {
   title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; voice?: string
@@ -36,14 +36,27 @@ export const dims = (p: Plan) => ASPECTS[p.aspect ?? '16:9']
 export const FPS = 30
 const OVERLAP = 6 // frames scenes overlap so transitions have something to cover
 
-// Editing presets: a human editor varies hold length with how much there is to read.
-// With a voiceover, the segment lasts as long as the line takes to say, plus a breath.
+// Editing presets: a human editor varies hold length with how much there is to read and how much the line matters.
+// Length comes from the script (or the voiceover, once generated); importance stretches or tightens it:
+// a key beat lingers after the line lands, a quick connective beat cuts away almost at once.
 const PACE = { punchy: { base: 40, perWord: 5 }, documentary: { base: 75, perWord: 9 } }
-export const sceneLen = (s: SceneData, pace: Plan['pace']) => {
-  if (s.audio?.duration) return Math.max(45, Math.ceil(s.audio.duration * FPS) + OVERLAP + 10)
-  const words = `${s.headline} ${s.sub}`.split(/\s+/).length
-  return Math.round(PACE[pace].base + words * PACE[pace].perWord + (s.kind === 'stat' ? 20 : 0) + (s.effects?.includes('typewriter') ? 15 : 0) + (s.prop ? 30 : 0))
+export type Importance = 1 | 2 | 3
+export const IMPORTANCE: Record<Importance, { label: string; scale: number; hold: number }> = {
+  1: { label: 'Quick', scale: 0.8, hold: 4 }, // hold = frames after the voiceover ends
+  2: { label: 'Normal', scale: 1, hold: 12 },
+  3: { label: 'Key', scale: 1.3, hold: 30 },
 }
+export const timing = (s: SceneData, pace: Plan['pace']) => {
+  const imp = IMPORTANCE[s.importance ?? 2] ?? IMPORTANCE[2]
+  if (s.audio?.duration) {
+    const voice = Math.ceil(s.audio.duration * FPS)
+    return { frames: Math.max(45, voice + OVERLAP + imp.hold), source: 'voice' as const, voice, hold: imp.hold }
+  }
+  const words = `${s.headline} ${s.sub}`.split(/\s+/).length
+  const base = PACE[pace].base + words * PACE[pace].perWord + (s.kind === 'stat' ? 20 : 0) + (s.effects?.includes('typewriter') ? 15 : 0) + (s.prop ? 30 : 0)
+  return { frames: Math.round(base * imp.scale), source: 'script' as const, words, voice: 0, hold: 0 }
+}
+export const sceneLen = (s: SceneData, pace: Plan['pace']) => timing(s, pace).frames
 export const sceneStarts = (p: Plan) => {
   let at = 0
   return p.scenes.map((s) => { const from = at; at += sceneLen(s, p.pace) - OVERLAP; return from })

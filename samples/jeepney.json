@@ -1,47 +1,102 @@
 {
-  "keywords": ["jeepney", "jeep", "king of the road", "puv"],
+  "keywords": [
+    "jeepney",
+    "jeep",
+    "king of the road",
+    "puv"
+  ],
   "title": "Jeepney 101",
   "style": "2d",
   "pace": "punchy",
   "aspect": "9:16",
   "voice": "en-PH-JamesNeural",
-  "theme": { "palette": "jeepney" },
+  "theme": {
+    "palette": "jeepney"
+  },
   "scenes": [
     {
-      "id": "jpy01", "kind": "title", "headline": "The King of the Road", "sub": "How a war surplus Jeep became a Filipino icon",
-      "value": "", "transition": "cut", "effects": ["punch"],
+      "id": "jpy01",
+      "kind": "title",
+      "headline": "The King of the Road",
+      "sub": "How a war surplus Jeep became a Filipino icon",
+      "value": "",
+      "transition": "cut",
+      "effects": [
+        "punch"
+      ],
       "purpose": "Hook: the nickname everyone knows.",
-      "voiceover": "They call it the King of the Road. Loud, colourful, and packed with passengers. This is the jeepney."
+      "voiceover": "They call it the King of the Road. Loud, colourful, and packed with passengers. This is the jeepney.",
+      "importance": 3
     },
     {
-      "id": "jpy02", "kind": "fact", "headline": "Born from leftover Jeeps", "sub": "US military Jeeps stayed behind after World War Two",
-      "value": "", "transition": "whip", "effects": ["highlight"],
+      "id": "jpy02",
+      "kind": "fact",
+      "headline": "Born from leftover Jeeps",
+      "sub": "US military Jeeps stayed behind after World War Two",
+      "value": "",
+      "transition": "whip",
+      "effects": [
+        "highlight"
+      ],
       "purpose": "Origin story.",
-      "voiceover": "After World War Two, American military Jeeps were left behind in the Philippines. Filipinos stretched them, added benches, and turned them into public transport."
+      "voiceover": "After World War Two, American military Jeeps were left behind in the Philippines. Filipinos stretched them, added benches, and turned them into public transport.",
+      "importance": 2
     },
     {
-      "id": "jpy03", "kind": "fact", "headline": "Every one is decorated", "sub": "Chrome horses, paint, names and prayers",
-      "value": "", "transition": "slide", "effects": ["shake"],
+      "id": "jpy03",
+      "kind": "fact",
+      "headline": "Every one is decorated",
+      "sub": "Chrome horses, paint, names and prayers",
+      "value": "",
+      "transition": "slide",
+      "effects": [
+        "shake"
+      ],
       "purpose": "Why it looks the way it does.",
-      "voiceover": "Owners made each one their own. Chrome horses on the hood, bright paint, family names and prayers across the front."
+      "voiceover": "Owners made each one their own. Chrome horses on the hood, bright paint, family names and prayers across the front.",
+      "importance": 1
     },
     {
-      "id": "jpy04", "kind": "quote", "headline": "Bayad po!", "sub": "Passing your fare down the line",
-      "value": "", "transition": "zoom", "effects": ["typewriter"],
+      "id": "jpy04",
+      "kind": "quote",
+      "headline": "Bayad po!",
+      "sub": "Passing your fare down the line",
+      "value": "",
+      "transition": "zoom",
+      "effects": [
+        "typewriter"
+      ],
       "purpose": "The everyday ritual riders recognise.",
-      "voiceover": "Riding one has its own rules. You hand your fare to the person beside you, say bayad po, and it travels hand to hand to the driver."
+      "voiceover": "Riding one has its own rules. You hand your fare to the person beside you, say bayad po, and it travels hand to hand to the driver.",
+      "importance": 2
     },
     {
-      "id": "jpy05", "kind": "stat", "headline": "PUV Modernization begins", "sub": "A push to replace old jeepneys with newer vehicles",
-      "value": "2017", "transition": "whip", "effects": ["invert"],
+      "id": "jpy05",
+      "kind": "stat",
+      "headline": "PUV Modernization begins",
+      "sub": "A push to replace old jeepneys with newer vehicles",
+      "value": "2017",
+      "transition": "whip",
+      "effects": [
+        "invert"
+      ],
       "purpose": "The modern tension.",
-      "voiceover": "In 2017, the government launched the PUV Modernization Program, aiming to replace ageing jeepneys with cleaner, newer vehicles."
+      "voiceover": "In 2017, the government launched the PUV Modernization Program, aiming to replace ageing jeepneys with cleaner, newer vehicles.",
+      "importance": 3
     },
     {
-      "id": "jpy06", "kind": "outro", "headline": "Ride one while you can", "sub": "The road is changing",
-      "value": "", "transition": "flash", "effects": ["punch"],
+      "id": "jpy06",
+      "kind": "outro",
+      "headline": "Ride one while you can",
+      "sub": "The road is changing",
+      "value": "",
+      "transition": "flash",
+      "effects": [
+        "punch"
+      ],
       "purpose": "Payoff with a gentle call to action.",
-      "voiceover": "The classic jeepney is changing fast. So next time one stops for you, hop on and enjoy the ride."
+      "voiceover": "The classic jeepney is changing fast. So next time one stops for you, hop on and enjoy the ride.",
+      "importance": 3
     }
   ]
 }

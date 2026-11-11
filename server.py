@@ -51,7 +51,10 @@ Effects (0-2 per segment): shake (impact camera shake), punch (slow push-in), in
 typewriter (letters type on), highlight (marker swipe under headline), vignette (dark edges, moody).
 Edit like a human editor: vary transitions, save shake/flash for the biggest beats, don't repeat the same effect back to back.
 Every segment also has `purpose` (one line: what this beat does for the viewer) and `voiceover` (what the narrator says
-over it: natural spoken sentences, 8-30 words, adds to the on-screen text instead of reading it out)."""
+over it: natural spoken sentences, 8-30 words, adds to the on-screen text instead of reading it out).
+`importance` sets how long a beat lingers: 3 = key beat (the hook, the biggest number, the payoff; give it room),
+2 = normal, 1 = quick connective beat (keep it brisk). Most segments are 2; use 3 for at most a third of them.
+Match line length to importance: key beats can carry a longer voiceover, quick beats a short one."""
 
 VOCAB = (ROOT / "bench3d" / "modelgen" / "VOCAB.md").read_text(encoding="utf-8")
 EXAMPLE_PROP = (ROOT / "bench3d" / "modelgen" / "props" / "boar_rider.json").read_text(encoding="utf-8")
@@ -78,6 +81,7 @@ class Scene(BaseModel):
     asset: str  # an asset url from the bucket, or ""
     purpose: str
     voiceover: str
+    importance: Literal[1, 2, 3]  # 1 quick, 2 normal, 3 key beat: scales how long the segment holds
     prop_json: str  # 3D recipe JSON, "" for none, "keep" to leave the current prop unchanged
 
 
@@ -200,7 +204,7 @@ def context(plan: dict, full_prop_index=None) -> str:
     """Plan as Claude sees it: props are summarised (they're big) except the one being edited."""
     scenes = []
     for i, s in enumerate(plan["scenes"]):
-        c = {k: s.get(k) for k in ("kind", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover")}
+        c = {k: s.get(k) for k in ("kind", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance")}
         if s.get("prop"):
             c["prop"] = json.dumps(s["prop"]) if i == full_prop_index else f"<3D prop '{s['prop'].get('name')}'; return \"keep\" to keep it>"
         scenes.append(c)
@@ -334,7 +338,7 @@ def demo_plan(topic: str, assets: list, style: str) -> dict:
          "value": "42%" if k == "stat" else "", "transition": t, "effects": fx,
          "asset": next(pics, "") if k == "fact" else "",
          "prop": json.loads(EXAMPLE_PROP) if style == "3d" and k in ("title", "outro") else None,
-         "purpose": f"Demo {k} beat", "voiceover": f"This is the {k} segment of a video about {topic}.",
+         "purpose": f"Demo {k} beat", "importance": 3 if k in ("title", "stat", "outro") else 2, "voiceover": f"This is the {k} segment of a video about {topic}.",
          "audio": None, "words": []} for k, t, fx in rows]}
 
 
@@ -431,7 +435,7 @@ def voice(body: dict) -> dict:
 
 # ---------- Asset bucket: files live in web/public/assets so Vite serves them at /assets/<file> ----------
 
-def save_asset(raw: bytes, mime: str, name: str) -> dict:
+def save_asset(raw: bytes, mime: str, name: str, source: str = "") -> dict:
     ext = EXT.get(mime.split(";")[0].strip().lower())
     if not ext:
         raise ValueError(f"Unsupported image type: {mime}")
@@ -440,13 +444,21 @@ def save_asset(raw: bytes, mime: str, name: str) -> dict:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "image"
     fname = f"{slug}-{uuid.uuid4().hex[:6]}.{ext}"
     (ASSETS / fname).write_bytes(raw)
-    return {"url": f"/assets/{fname}", "name": name[:60] or "image"}
+    meta = {"name": name[:60] or "image", "source": source}
+    if source:  # where a found image came from, so it can be credited
+        (ASSETS / f"{fname}.json").write_text(json.dumps(meta), encoding="utf-8")
+    return {"url": f"/assets/{fname}", **meta}
 
 
 def list_assets() -> list:
-    files = sorted(ASSETS.glob("*"), key=lambda p: p.stat().st_mtime)
-    return [{"url": f"/assets/{p.name}", "name": p.stem.rsplit("-", 1)[0].replace("-", " ")}
-            for p in files if p.suffix[1:] in EXT.values()]
+    out = []
+    for p in sorted(ASSETS.glob("*"), key=lambda p: p.stat().st_mtime):
+        if p.suffix[1:] not in EXT.values():
+            continue
+        side = p.with_name(p.name + ".json")
+        meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {"name": p.stem.rsplit("-", 1)[0].replace("-", " ")}
+        out.append({"url": f"/assets/{p.name}", "source": "", **meta})
+    return out
 
 
 def upload(body: dict) -> dict:
@@ -459,10 +471,12 @@ def upload(body: dict) -> dict:
 class ImgFinder(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.found: list[tuple[str, str]] = []  # (src, alt)
+        self.found: list[tuple[str, str]] = []  # (src, alt); the page's og:image first, alt "cover"
+        self.title, self._in_title = "", False
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        self._in_title = tag == "title"
         if tag == "meta" and a.get("property", a.get("name", "")) in ("og:image", "twitter:image") and a.get("content"):
             self.found.insert(0, (a["content"], "cover"))
         if tag == "img":
@@ -470,6 +484,10 @@ class ImgFinder(HTMLParser):
             src = (srcset[-1] if srcset else None) or a.get("data-src") or a.get("src")  # largest srcset candidate first
             if src and not src.startswith("data:"):
                 self.found.append((src, a.get("alt") or ""))
+
+    def handle_data(self, data):
+        if self._in_title and not self.title:
+            self.title = data.strip()
 
 
 def fetch(url: str, limit: int) -> tuple[bytes, str]:
@@ -504,15 +522,97 @@ def scrape(body: dict) -> list:
     return out
 
 
+JUNK = re.compile(r"logo|icon|avatar|sprite|badge|placeholder|gravatar|pixel|emoji|spinner|button|banner|advert|/ads?/|1x1")
+
+
+def find_images(query: str, limit: int = 8) -> list:
+    """Topic -> images: ScrapeGraphAI's web search finds relevant pages, then each page's cover image and captioned
+    images are ranked by how well their caption/filename matches the query. Saves the best ones to the bucket,
+    remembering the page each came from (for credits)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from scrapegraphai.utils.research_web import search_on_web
+
+    pages = search_on_web(query, max_results=5, timeout=20)
+    words = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
+
+    def candidates(page: str) -> list:
+        try:
+            html, _ = fetch(page, 2_000_000)
+        except Exception as e:
+            print("page skip", page, repr(e)[:120])
+            return []
+        f = ImgFinder()
+        f.feed(html.decode("utf-8", "replace"))
+        site = urlparse(page).netloc.removeprefix("www.")
+        out = []
+        for src, alt in f.found[:60]:
+            u = urljoin(page, src)
+            text = f"{alt} {Path(urlparse(u).path).stem}".lower()
+            if urlparse(u).path.lower().endswith((".svg", ".gif")) or JUNK.search(text):
+                continue
+            cover = alt == "cover"
+            score = 2 * sum(w in text for w in words) + (3 if cover else 0)
+            if score:
+                name = (f.title.split("|")[0].split(" - ")[0].strip() if cover else alt) or query
+                out.append((score, u, name, page, site))
+        return out
+
+    with ThreadPoolExecutor(8) as ex:  # the venue network is slow; fetch pages and images in parallel
+        ranked = sorted((c for cs in ex.map(candidates, pages) for c in cs), key=lambda c: -c[0])
+        seen, picks = set(), []
+        for c in ranked:
+            if c[1] not in seen:
+                seen.add(c[1])
+                picks.append(c)
+
+        def download(c):
+            try:
+                raw, mime = fetch(c[1], MAX_BYTES)
+                return (c, raw, mime) if len(raw) > 15_000 and mime.split(";")[0] in EXT else None
+            except Exception:
+                return None
+
+        varied, per_page = [], {}
+        for c in picks:
+            if per_page.get(c[3], 0) < 2:
+                per_page[c[3]] = per_page.get(c[3], 0) + 1
+                varied.append(c)
+        saved, hashes = [], set()
+        for got in ex.map(download, varied[: limit * 2]):  # at most 2 per page, so one site can't fill the bucket
+            if not got or len(saved) >= limit:
+                continue
+            (score, u, name, page, site), raw, mime = got
+            h = hashlib.sha1(raw).hexdigest()
+            if h in hashes:  # same picture served from two pages
+                continue
+            hashes.add(h)
+            short = " ".join(name.split())
+            short = short if len(short) <= 34 else short[:34].rsplit(" ", 1)[0] + "…"
+            saved.append(save_asset(raw, mime, f"{short} · {site}", source=page))
+    return saved
+
+
+def find(body: dict) -> list:
+    q = body.get("query", "").strip()
+    if not q:
+        raise ValueError("Type a topic to search images for")
+    out = find_images(q, int(body.get("limit", 8)))
+    if not out:
+        raise ValueError("No good images found for that topic; try different words")
+    return out
+
+
 def delete_asset(body: dict) -> dict:
     p = ASSETS / Path(body.get("url", "")).name  # .name strips any ../ so we stay inside ASSETS
     if p.is_file():
         p.unlink()
+    p.with_name(p.name + ".json").unlink(missing_ok=True)
     return {"ok": True}
 
 
 ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/assets/upload": upload,
-          "/api/assets/scrape": scrape, "/api/assets/delete": delete_asset}
+          "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/delete": delete_asset}
 
 
 class Handler(BaseHTTPRequestHandler):

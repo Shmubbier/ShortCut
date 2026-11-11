@@ -1,5 +1,11 @@
 {
-  "keywords": ["ube", "purple yam", "halaya", "halo-halo", "halo halo"],
+  "keywords": [
+    "ube",
+    "purple yam",
+    "halaya",
+    "halo-halo",
+    "halo halo"
+  ],
   "title": "Why Filipinos Love Ube",
   "style": "editorial",
   "pace": "punchy",
@@ -7,46 +13,102 @@
   "voice": "en-PH-RosaNeural",
   "scenes": [
     {
-      "id": "ube01", "kind": "title", "headline": "Why ube is everywhere", "sub": "The purple yam behind your favourite desserts",
-      "value": "", "transition": "cut", "effects": ["punch"],
+      "id": "ube01",
+      "kind": "title",
+      "headline": "Why ube is everywhere",
+      "sub": "The purple yam behind your favourite desserts",
+      "value": "",
+      "transition": "cut",
+      "effects": [
+        "punch"
+      ],
       "purpose": "Hook: name the obsession and promise the why.",
-      "voiceover": "Ube cake, ube ice cream, ube pandesal. In the Philippines, this purple root is everywhere. So what makes it so special?"
+      "voiceover": "Ube cake, ube ice cream, ube pandesal. In the Philippines, this purple root is everywhere. So what makes it so special?",
+      "importance": 3
     },
     {
-      "id": "ube02", "kind": "fact", "headline": "It's a yam, not taro", "sub": "Ube is Dioscorea alata, the purple yam",
-      "value": "", "transition": "whip", "effects": ["highlight"],
+      "id": "ube02",
+      "kind": "fact",
+      "headline": "It's a yam, not taro",
+      "sub": "Ube is Dioscorea alata, the purple yam",
+      "value": "",
+      "transition": "whip",
+      "effects": [
+        "highlight"
+      ],
       "purpose": "Clear up the most common mix-up.",
-      "voiceover": "First, ube is not taro. It's a yam, Dioscorea alata, with a sweeter, nuttier taste and a deep violet flesh."
+      "voiceover": "First, ube is not taro. It's a yam, Dioscorea alata, with a sweeter, nuttier taste and a deep violet flesh.",
+      "importance": 2
     },
     {
-      "id": "ube03", "kind": "fact", "headline": "The purple is natural", "sub": "The same pigments that colour blueberries",
-      "value": "", "transition": "zoom", "effects": ["vignette"],
+      "id": "ube03",
+      "kind": "fact",
+      "headline": "The purple is natural",
+      "sub": "The same pigments that colour blueberries",
+      "value": "",
+      "transition": "zoom",
+      "effects": [
+        "vignette"
+      ],
       "purpose": "Explain the colour that makes it famous.",
-      "voiceover": "That colour isn't dye. Ube is rich in anthocyanins, the same natural pigments you find in blueberries and red cabbage."
+      "voiceover": "That colour isn't dye. Ube is rich in anthocyanins, the same natural pigments you find in blueberries and red cabbage.",
+      "importance": 1
     },
     {
-      "id": "ube04", "kind": "stat", "headline": "of stirring for real halaya", "sub": "Grated ube, milk, butter and sugar over low heat",
-      "value": "60 min", "transition": "slide", "effects": ["shake"],
+      "id": "ube04",
+      "kind": "stat",
+      "headline": "of stirring for real halaya",
+      "sub": "Grated ube, milk, butter and sugar over low heat",
+      "value": "60 min",
+      "transition": "slide",
+      "effects": [
+        "shake"
+      ],
       "purpose": "A concrete number that shows the craft.",
-      "voiceover": "Ube halaya, the classic jam, takes patience. Grated ube, milk, butter and sugar, stirred over low heat for up to an hour."
+      "voiceover": "Ube halaya, the classic jam, takes patience. Grated ube, milk, butter and sugar, stirred over low heat for up to an hour.",
+      "importance": 3
     },
     {
-      "id": "ube05", "kind": "quote", "headline": "Halo-halo means mix-mix", "sub": "Ube halaya often crowns the top",
-      "value": "", "transition": "whip", "effects": ["invert"],
+      "id": "ube05",
+      "kind": "quote",
+      "headline": "Halo-halo means mix-mix",
+      "sub": "Ube halaya often crowns the top",
+      "value": "",
+      "transition": "whip",
+      "effects": [
+        "invert"
+      ],
       "purpose": "Tie ube to the most iconic Filipino dessert.",
-      "voiceover": "And then there's halo-halo, literally mix-mix. Shaved ice, beans, fruit, leche flan, and very often a scoop of ube on top."
+      "voiceover": "And then there's halo-halo, literally mix-mix. Shaved ice, beans, fruit, leche flan, and very often a scoop of ube on top.",
+      "importance": 2
     },
     {
-      "id": "ube06", "kind": "fact", "headline": "Now the world wants it", "sub": "Ube flavours show up in bakeries far from home",
-      "value": "", "transition": "zoom", "effects": ["typewriter"],
+      "id": "ube06",
+      "kind": "fact",
+      "headline": "Now the world wants it",
+      "sub": "Ube flavours show up in bakeries far from home",
+      "value": "",
+      "transition": "zoom",
+      "effects": [
+        "typewriter"
+      ],
       "purpose": "Widen out: from local staple to global trend.",
-      "voiceover": "Today you'll find ube lattes and ube donuts in cities all over the world, carried by Filipino bakers and a very photogenic colour."
+      "voiceover": "Today you'll find ube lattes and ube donuts in cities all over the world, carried by Filipino bakers and a very photogenic colour.",
+      "importance": 1
     },
     {
-      "id": "ube07", "kind": "outro", "headline": "Taste the purple", "sub": "Next merienda, make it ube",
-      "value": "", "transition": "flash", "effects": ["punch"],
+      "id": "ube07",
+      "kind": "outro",
+      "headline": "Taste the purple",
+      "sub": "Next merienda, make it ube",
+      "value": "",
+      "transition": "flash",
+      "effects": [
+        "punch"
+      ],
       "purpose": "Payoff and call to action.",
-      "voiceover": "Sweet, nutty, and unmistakably purple. Next merienda, make it ube."
+      "voiceover": "Sweet, nutty, and unmistakably purple. Next merienda, make it ube.",
+      "importance": 3
     }
   ]
 }

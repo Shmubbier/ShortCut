@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Recipe } from './video/bench3d/recipe'
 import { build, loadWasm } from './video/Stage3D'
 import { FONTS, PALETTES, STYLES, resolveTheme } from './video/theme'
-import { FPS, sceneLen, type Plan, type SceneData } from './video/Video'
+import { FPS, IMPORTANCE, sceneLen, timing, type Importance, type Plan, type SceneData } from './video/Video'
 
 export const VOICES = [
   ['en-US-AndrewNeural', 'Andrew · US'], ['en-US-AvaNeural', 'Ava · US'], ['en-GB-RyanNeural', 'Ryan · UK'],
@@ -19,6 +19,7 @@ type Props = {
   voice: (i: number | null) => void
   busy: string
   fixProp: (i: number, error: string) => void
+  findImages: (query: string, assignTo: number | null) => void
 }
 
 // 3D prop build errors, checked with the same builder the renderer uses.
@@ -94,7 +95,9 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
       <ol className="seglist">
         {plan.scenes.map((s, i) => (
           <li key={s.id} onClick={() => setSel(i)}>
-            <em>{s.kind}</em><span>{s.purpose || s.headline}</span><small>{secs(sceneLen(s, plan.pace))}</small>
+            <em>{s.kind}</em><span>{s.purpose || s.headline}</span>
+            <span className="bar"><i className={`imp${s.importance ?? 2}`} style={{ width: `${(sceneLen(s, plan.pace) / Math.max(...plan.scenes.map((x) => sceneLen(x, plan.pace)))) * 100}%` }} /></span>
+            <small>{secs(sceneLen(s, plan.pace))}</small>
           </li>
         ))}
       </ol>
@@ -102,7 +105,7 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
   )
 }
 
-function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp }: Props & { i: number }) {
+function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp, findImages }: Props & { i: number }) {
   const s = plan.scenes[i]
   const propErr = usePropError(plan.style === '3d' ? s.prop : null)
   const set = (patch: Partial<SceneData>) => change({ ...plan, scenes: plan.scenes.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
@@ -133,6 +136,23 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp 
       <label>Headline<input value={s.headline} onChange={(e) => set({ headline: e.target.value })} /></label>
       <label>Subline<input value={s.sub} onChange={(e) => set({ sub: e.target.value })} /></label>
       {s.kind === 'stat' && <label>Number<input value={s.value} onChange={(e) => set({ value: e.target.value })} /></label>}
+
+      <h3>Timing · {secs(timing(s, plan.pace).frames)}</h3>
+      <div className="imp-switch" role="group" aria-label="Importance">
+        {([1, 2, 3] as Importance[]).map((lv) => (
+          <button key={lv} className={(s.importance ?? 2) === lv ? 'on' : ''} onClick={() => { snapshot(); set({ importance: lv }) }}>{IMPORTANCE[lv].label}</button>
+        ))}
+      </div>
+      <small className="tip">{(() => {
+        const t = timing(s, plan.pace)
+        return t.source === 'voice'
+          ? `${secs(t.voice)} of voiceover + ${secs(t.hold)} hold for a ${IMPORTANCE[s.importance ?? 2].label.toLowerCase()} beat.`
+          : `From ${t.words} words of on-screen script, ×${IMPORTANCE[s.importance ?? 2].scale} for importance. Generate the voice to time it to the narration.`
+      })()}</small>
+
+      <h3>Image</h3>
+      {s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">No image on this segment.</p>}
+      <button onClick={() => findImages(`${plan.title} ${s.headline}`, i)} disabled={!!busy}>{busy === `find-${i}` ? 'Searching the web…' : 'Find images for this segment'}</button>
 
       <h3>Voiceover</h3>
       <textarea rows={4} value={s.voiceover ?? ''} placeholder="What the narrator says over this segment"
