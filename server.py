@@ -173,7 +173,18 @@ def style_text(style: str) -> str:
     return PROP_GUIDE if style == "3d" else "Set `prop_json` to \"\" everywhere (not the 3D style)."
 
 
+def load_env() -> None:
+    """Read KEY=value lines from .env (git-ignored) on each request, so adding the API key needs no restart."""
+    env = ROOT / ".env"
+    if env.exists():
+        for line in env.read_text(encoding="utf-8-sig").splitlines():
+            k, sep, v = line.strip().partition("=")
+            if sep and k and not k.startswith("#"):
+                os.environ[k.strip()] = v.strip().strip('"').strip("'")
+
+
 def create(body: dict) -> dict:
+    load_env()
     topic = body.get("topic", "").strip()
     if not topic:
         raise ValueError("Describe what the video is about")
@@ -196,6 +207,7 @@ Hook in the first segment, payoff in the last. Headlines short and punchy. No ha
 
 
 def edit(body: dict) -> dict:
+    load_env()
     plan, i, instr = body["plan"], body.get("index"), body.get("instruction", "").strip()
     if not instr:
         raise ValueError("Type what to change")
