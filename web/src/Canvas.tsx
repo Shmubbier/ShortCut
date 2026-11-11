@@ -1,6 +1,6 @@
 import { Thumbnail } from '@remotion/player'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { dims, EFFECTS, FPS, IMPORTANCE, Main, planDuration, sceneStarts, timing, TRANSITIONS, type Effect, type Importance, type Plan } from './video/Video'
+import { dims, EFFECTS, FPS, IMPORTANCE, Main, OVERLAP, planDuration, sceneStarts, timing, TRANSITIONS, type Effect, type Importance, type Plan } from './video/Video'
 
 type Props = {
   plan: Plan
@@ -184,8 +184,8 @@ export function Canvas(props: Props) {
                 frameToDisplay={starts[i] + 30} durationInFrames={planDuration(plan)} fps={FPS} style={{ width: '100%', pointerEvents: 'none' }} />
               <p>{s.value && <b>{s.value} </b>}{s.headline}</p>
               {/* Timing: length vs the longest segment, coloured by importance; dots set importance */}
-              <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${(lens[i].frames / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
-                <span className="secs">{(lens[i].frames / FPS).toFixed(1)}s</span>
+              <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
+                <span className="secs">{((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s</span>
                 <span className="bar"><i style={{ width: `${(lens[i].frames / longest) * 100}%` }} /></span>
                 <span className="pips" onPointerDown={(e) => e.stopPropagation()}>
                   {([1, 2, 3] as Importance[]).map((lv) => (

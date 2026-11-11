@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Recipe } from './video/bench3d/recipe'
 import { build, loadWasm } from './video/Stage3D'
 import { FONTS, PALETTES, STYLES, resolveTheme } from './video/theme'
-import { FPS, IMPORTANCE, MAX_LEN, MIN_LEN, OVERLAP, sceneLen, timing, type Importance, type Plan, type SceneData, type Track } from './video/Video'
+import { FPS, IMPORTANCE, MAX_LEN, MIN_LEN, OVERLAP, planDuration, sceneLen, timing, type Importance, type Plan, type SceneData, type Track } from './video/Video'
 
 export const VOICES = [
   ['en-US-AndrewNeural', 'Andrew · US'], ['en-US-AvaNeural', 'Ava · US'], ['en-GB-RyanNeural', 'Ryan · UK'],
@@ -34,6 +34,7 @@ function usePropError(prop: Recipe | null | undefined) {
 }
 
 const secs = (frames: number) => `${(frames / FPS).toFixed(1)}s`
+const vis = (frames: number) => secs(frames - OVERLAP) // what the viewer sees of a segment, after the transition overlap
 
 export function Inspector(p: Props) {
   return (
@@ -46,7 +47,6 @@ export function Inspector(p: Props) {
 function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
   const t = resolveTheme(plan.style, plan.theme)
   const theme = (k: string, v: unknown) => { snapshot(); change({ ...plan, theme: { ...plan.theme, [k]: v } }) }
-  const total = plan.scenes.reduce((a, s) => a + sceneLen(s, plan.pace), 0)
   const voiced = plan.scenes.filter((s) => s.audio).length
   return (
     <>
@@ -108,13 +108,13 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
       <label className="check"><input type="checkbox" checked={plan.captions !== false} onChange={(e) => { snapshot(); change({ ...plan, captions: e.target.checked }) }} /> Show captions</label>
       <button onClick={() => voice(null)} disabled={!!busy}>{busy === 'voice-all' ? 'Voicing…' : `Voice all segments (${voiced}/${plan.scenes.length} done)`}</button>
 
-      <h3>Segments · {secs(total)}</h3>
+      <h3>Segments · {secs(planDuration(plan))}</h3>
       <ol className="seglist">
         {plan.scenes.map((s, i) => (
           <li key={s.id} onClick={() => setSel(i)}>
             <em>{s.kind}</em><span>{s.purpose || s.headline}</span>
             <span className="bar"><i className={`imp${s.importance ?? 2}`} style={{ width: `${(sceneLen(s, plan.pace) / Math.max(...plan.scenes.map((x) => sceneLen(x, plan.pace)))) * 100}%` }} /></span>
-            <small>{secs(sceneLen(s, plan.pace))}</small>
+            <small>{vis(sceneLen(s, plan.pace))}</small>
           </li>
         ))}
       </ol>
@@ -183,7 +183,7 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp,
       <div className="seghead">
         <button className="link" onClick={() => setSel(null)}>← Overview</button>
         <h2>Segment {i + 1} <em>{s.kind}</em></h2>
-        <small>{secs(sceneLen(s, plan.pace))}</small>
+        <small>{vis(sceneLen(s, plan.pace))}</small>
       </div>
 
       <label>Purpose<textarea rows={2} value={s.purpose ?? ''} placeholder="What this beat does for the viewer" onChange={(e) => set({ purpose: e.target.value })} /></label>
@@ -193,7 +193,7 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp,
       <label>Subline<input value={s.sub} onChange={(e) => set({ sub: e.target.value })} /></label>
       {s.kind === 'stat' && <label>Number<input value={s.value} onChange={(e) => set({ value: e.target.value })} /></label>}
 
-      <h3>Timing · {secs(timing(s, plan.pace).frames)}</h3>
+      <h3>Timing · {vis(timing(s, plan.pace).frames)}</h3>
       <div className="imp-switch" role="group" aria-label="Importance">
         {([1, 2, 3] as Importance[]).map((lv) => (
           <button key={lv} className={(s.importance ?? 2) === lv ? 'on' : ''} onClick={() => { snapshot(); set({ importance: lv }) }}>{IMPORTANCE[lv].label}</button>
