@@ -9,9 +9,17 @@ export type Effect = 'shake' | 'punch' | 'invert' | 'typewriter' | 'highlight' |
 export type Aspect = '16:9' | '9:16' | '1:1' | '4:5'
 export type Word = { text: string; start: number; end: number } // seconds from the segment's audio start
 export type Track = { id: string; title: string; url: string; mood?: string; bpm?: number; volume?: number }
+// What a segment is for (spec §9). `kind` stays the text layout (title/fact/stat/quote/outro); `role` is the content type.
+export type Role = 'footage' | 'image' | 'narration' | 'title' | 'broll'
+export const ROLES: Record<Role, string> = { footage: 'Video footage', image: 'Image / visual', narration: 'Narration', title: 'Text / title card', broll: 'Transition / B-roll' }
+// A segment's visual media. Images can still use the older `asset` field; video footage uses this.
+// trimStart/trimEnd are seconds into the source clip (footage workflow, spec §11).
+export type Media = { type: 'video' | 'image'; url: string; name?: string; trimStart?: number; trimEnd?: number; duration?: number }
+// An empty segment is one the user inserted and hasn't filled yet (spec §9): no text, voice, media or prop.
+export const isEmpty = (s: SceneData) => !s.headline?.trim() && !s.voiceover?.trim() && !s.asset && !s.media && !s.prop
 export type SceneData = {
   id: string; kind: Kind; headline: string; sub: string; value: string; transition: Transition; effects: Effect[]
-  asset?: string; prop?: Recipe | null
+  asset?: string; prop?: Recipe | null; role?: Role; media?: Media | null; title?: string
   purpose?: string; voiceover?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
 }
 export type Plan = {

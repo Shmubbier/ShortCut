@@ -31,26 +31,65 @@ How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things sta
   skip Claude Code for ~20 min, so the fallback is instant. The *first* failing request is still slow (~2 min), because
   Claude Code retries before giving up.
 
-## Next up, in priority order for tonight's demo
+## The new spec (Nov 12): "AI-powered video storyboard and editing application"
 
-1. **Project persistence.** Save the plan to `localStorage` (or `projects/<id>.json` via the API) on every change, and restore on load.
-   Right now a refresh or HMR reload loses the video. *Owner suggestion: whoever touches `App.tsx` next.*
-2. **Render MP4 button.** API route that runs `npx remotion render src/video/index.tsx Main out/<id>.mp4 --props=<plan>`
-   in `web/`. Asset, media and music URLs are relative (`/assets/...`), so prefix them with `http://127.0.0.1:8787` in the props file. Run in the background and poll.
-3. **Listen to the music** (`web/public/music/*.wav`, or the Music panel preview). Retune `LIBRARY` recipes in `music.py` if any sound off, then rerun `python music.py`.
-4. **Voice all segments in parallel** (it's sequential: ~5 s per segment). A thread pool in `server.py` `voice()`.
-5. **Demo polish:** pick 2 hero topics, pre-generate them, voice them, and keep a sample loaded as a fallback for bad Wi-Fi.
-6. Nice to have: true pixelation for the pixel style, a "regenerate this segment's image" button, split `server.py` into modules.
+The team's spec (prompt → storyboard editor, plus footage upload → transcript → storyboard → export) is split by phase.
+**The must-have for tonight is the new UI layout.**
 
-## Who owns what (to avoid two agents in one file)
+### Who owns what (don't edit the other side's files without saying so first)
 
-| Area | Files | Suggested owner |
+| Phases | Owner | Files |
 |---|---|---|
-| Server, AI prompts, voice, images, music | `server.py`, `music.py`, `samples/` | Claude Code |
-| Editor UI and persistence | `App.tsx`, `Inspector.tsx`, `Canvas.tsx`, `App.css` | Codex (UI fork on `ui-redesign` too, so coordinate) |
-| Renderer, styles, 3D | `web/src/video/*` | Whoever is free; tell the other first |
+| **1-3 UI:** centred prompt that shrinks into a floating assistant, progress bar, card-by-card reveal, icon sidebar (Assets, Script, Style, Settings), transcript panel, inspector that stays open, add/delete/empty segments, timestamps | **Claude Code** | `web/src/App.tsx`, `Canvas.tsx`, `Inspector.tsx`, `App.css`, new `web/src/panels/*` |
+| **4 Footage + export:** video upload, transcription, storyboard from footage, video segments with trimming, MP4 render/export | **Codex** | `server.py` (new routes, below), `web/src/video/Video.tsx` (rendering video segments), `web/src/video/index.tsx` |
+| Shared contract | Both, announce changes | Types at the top of `Video.tsx` + pydantic models in `server.py` |
 
-Say in your first message which row you're taking. When you finish, update this file (what's done, what moved).
+### The shared data contract (already committed)
+
+`SceneData` in `web/src/video/Video.tsx` gained:
+- `role?: 'footage' | 'image' | 'narration' | 'title' | 'broll'` (content type; `kind` stays the text layout). Labels in `ROLES`.
+- `title?: string` (2-4 word card name). The AI fills `role` and `title` (`server.py` `Scene`).
+- `media?: { type: 'video' | 'image'; url; name?; trimStart?; trimEnd?; duration? }`: **the segment's video footage**. `trimStart` and `trimEnd` are seconds into the source clip.
+  Images may keep using the older `asset` string.
+- `isEmpty(scene)`: a user-inserted segment with no text, voice, media or prop.
+
+### Codex brief: phase 4 (footage + export)
+
+Everything below is server or renderer work. The UI side (an upload button in the Assets panel, a trim control in the
+inspector) is Claude's: **expose these endpoints and Claude will wire the UI to them.**
+
+1. `POST /api/footage/upload {name, data: dataURL}` → save to `web/public/footage/<slug>.mp4` (allow mp4/webm/mov; cap ~200 MB),
+   serve it at `/footage/<file>` (add it to the static prefixes in `Handler.do_GET`; git-ignore the folder), and return
+   `{url, name, duration}`. Read the duration with PyAV (`av.open(path).duration / 1e6`; PyAV 18.1 is installed with faster-whisper).
+2. `POST /api/footage/transcribe {url}` → faster-whisper can read the video file directly (PyAV decodes the audio; no system
+   ffmpeg is needed). Reuse `whisper()` and return `{segments: [{start, end, text, words: [...]}]}`.
+3. `POST /api/footage/storyboard {url, transcript, style, aspect}` → ask the AI (same `ask()` path) to group transcript passages
+   into 4-8 segments. Each gets `role: 'footage'`, `media: {type:'video', url, trimStart, trimEnd}`, `voiceover` = the passage text,
+   `words` = that passage's word timings re-based to segment time (so the existing captions work), and `length` = trimEnd - trimStart.
+   Return a full Plan (reuse `direction_fields` / `demo_direction` for style and music).
+4. **Renderer:** in `Video.tsx` `Shot`, if `s.media?.type === 'video'`, draw `<OffthreadVideo src startFrom={trimStart*FPS}
+   endAt={trimEnd*FPS}>` full-bleed behind the text (use Remotion's `<Video>` in the Player if OffthreadVideo misbehaves there),
+   and keep its own audio (duck the music under it like the voiceover). In `timing()`, a footage segment's length = trimEnd - trimStart unless `length` is set.
+5. **Export:** `POST /api/render {plan}` → write the props (prefix relative `/assets` `/media` `/music` `/footage` URLs with
+   `http://127.0.0.1:8787`), run `npx remotion render src/video/index.tsx Main out/<id>.mp4 --props=<file> --gl=angle` in `web/`
+   as a background job; `GET /api/render/<id>` returns `{status, progress, url}`. Serve the finished file under `/renders/`.
+6. Verify with a real 20-60 s clip: upload → transcript → storyboard → preview plays the right slices → MP4 renders with captions.
+
+### Claude's queue (phases 1-3), in order
+1. Centred first prompt that minimises into a floating assistant icon (jiggles while working); bottom progress bar driven by real stages.
+2. Staged generation: images → research and writing → storyboard; cards reveal one by one, then the preview slides in.
+3. Inspector slides in from the right on selection, stays until collapsed (chevron), and reopens from a small button.
+4. Icon sidebar (Assets, Script, Style, Settings): hover labels, staggered entrance, one flyout panel at a time.
+5. Script panel (full transcript in order with timestamps), synced with the inspector through the same `voiceover` field.
+6. Add a segment between cards, delete with undo, empty-segment state (the assistant highlights), editable start/end timestamps.
+
+### Still on the general backlog
+- Project persistence (a refresh loses the video). Claude will add `localStorage` save/restore with the UI work.
+- Listen to the music; retune `music.py` recipes if needed.
+- Voice all segments in parallel (thread pool in `voice()`).
+- Demo polish: pre-generate 2 hero topics; keep a sample as the bad-Wi-Fi fallback.
+
+When you finish something, update this file (what's done, what moved).
 
 ## Environment state
 

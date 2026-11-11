@@ -57,7 +57,10 @@ over it: natural spoken sentences, 8-30 words, adds to the on-screen text instea
 `importance` sets how long a beat lingers: 3 = key beat (the hook, the biggest number, the payoff; give it room),
 2 = normal, 1 = quick connective beat (keep it brisk). Most segments are 2; use 3 for at most a third of them.
 Match line length to importance: key beats can carry a longer voiceover, quick beats a short one.
-A segment with `length` (seconds) has a length the user fixed: fit its voiceover to about 2.5 spoken words per second."""
+A segment with `length` (seconds) has a length the user fixed: fit its voiceover to about 2.5 spoken words per second.
+`title` is a 2-4 word name for the storyboard card. `role`: title (text/title card), image (built around a picture),
+narration (voice-led), broll (short visual bridge), footage (only when the user supplied video clips).
+An empty segment (no headline, no voiceover) is one the user inserted: fill it in to fit between its neighbours."""
 
 VOCAB = (ROOT / "bench3d" / "modelgen" / "VOCAB.md").read_text(encoding="utf-8")
 EXAMPLE_PROP = (ROOT / "bench3d" / "modelgen" / "props" / "boar_rider.json").read_text(encoding="utf-8")
@@ -85,6 +88,8 @@ class Scene(BaseModel):
     purpose: str
     voiceover: str
     importance: Literal[1, 2, 3]  # 1 quick, 2 normal, 3 key beat: scales how long the segment holds
+    title: str  # 2-4 word segment name for the storyboard card, e.g. "The hook", "Price shock"
+    role: Literal["footage", "image", "narration", "title", "broll"]  # content type; keep in sync with ROLES in Video.tsx
     prop_json: str  # 3D recipe JSON, "" for none, "keep" to leave the current prop unchanged
 
 
@@ -247,7 +252,7 @@ def context(plan: dict, full_prop_index=None) -> str:
     """Plan as Claude sees it: props are summarised (they're big) except the one being edited."""
     scenes = []
     for i, s in enumerate(plan["scenes"]):
-        c = {k: s.get(k) for k in ("kind", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance", "length")}
+        c = {k: s.get(k) for k in ("kind", "title", "role", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance", "length")}
         if s.get("prop"):
             c["prop"] = json.dumps(s["prop"]) if i == full_prop_index else f"<3D prop '{s['prop'].get('name')}'; return \"keep\" to keep it>"
         scenes.append(c)
