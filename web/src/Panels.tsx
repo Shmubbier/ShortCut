@@ -2,7 +2,7 @@
 // because it shares upload/search state with the assistant. All panels edit the same Plan through change()/snapshot().
 import { useEffect, useState, type ReactNode } from 'react'
 import { FONTS, PALETTES, STYLES, resolveTheme, type Style } from './video/theme'
-import { ASPECTS, EFFECTS, FPS, OVERLAP, ROLES, sceneLen, sceneStarts, TRANSITIONS, isEmpty, type Aspect, type Effect, type Plan, type Track, type Transition } from './video/Video'
+import { ASPECTS, CAPTION_LOOKS, EFFECTS, FPS, OVERLAP, ROLES, sceneLen, sceneStarts, TRANSITIONS, isEmpty, type Aspect, type Effect, type Plan, type Track, type Transition } from './video/Video'
 
 export const VOICES = [
   ['en-US-AndrewNeural', 'Andrew · US'], ['en-US-AvaNeural', 'Ava · US'], ['en-GB-RyanNeural', 'Ryan · UK'],
@@ -59,6 +59,7 @@ export function ScriptPanel({ plan, change, sel, onSelect }: Edit & { sel: numbe
 export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileProps: (t: Tile) => object }) {
   const t = resolveTheme(plan.style, plan.theme)
   const theme = (k: string, v: unknown) => { snapshot(); change({ ...plan, theme: { ...plan.theme, [k]: v } }) }
+  const cap = (k: string, v: string) => { snapshot(); change({ ...plan, captionStyle: { ...plan.captionStyle, [k]: v } }) }
   return (
     <>
       <label>Visual style
@@ -106,7 +107,29 @@ export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileP
           <option value="punchy">Punchy</option><option value="documentary">Documentary</option>
         </select>
       </label>
+      <h3>Captions</h3>
       <label className="check"><input type="checkbox" checked={plan.captions !== false} onChange={(e) => { snapshot(); change({ ...plan, captions: e.target.checked }) }} /> Word-by-word captions</label>
+      {plan.captions !== false && (
+        <div className="row">
+          <label>Position
+            <select value={plan.captionStyle?.position ?? 'bottom'} onChange={(e) => cap('position', e.target.value)}>
+              <option value="bottom">Bottom</option><option value="middle">Middle</option><option value="top">Top</option>
+            </select>
+          </label>
+          <label>Size
+            <select value={plan.captionStyle?.size ?? 'm'} onChange={(e) => cap('size', e.target.value)}>
+              <option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option>
+            </select>
+          </label>
+          <label>Look
+            <select value={plan.captionStyle?.look ?? 'box'} onChange={(e) => cap('look', e.target.value)}>
+              {Object.entries(CAPTION_LOOKS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+      <small className="tip">Captions appear once segments are voiced (Settings → Voice all segments).</small>
+      <h3>Transitions & effects</h3>
       <span className="rec-label">Transitions · drag onto a segment</span>
       <div className="grid">
         {(Object.keys(TRANSITIONS) as Transition[]).map((name) => (

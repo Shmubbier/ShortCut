@@ -19,6 +19,7 @@ type Props = {
   fixLength: (i: number, seconds: number) => void // ask the AI to rewrite a segment's voiceover to fit a fixed length
   fill: (i: number) => void // ask the AI to write an empty segment
   remove: (i: number) => void
+  clipFor: (i: number, clip: { url: string; name: string; duration?: number }) => void // put a library video clip on segment i
 }
 
 // 3D prop build errors, checked with the same builder the renderer uses.
@@ -45,7 +46,7 @@ export function Inspector(p: Props) {
   )
 }
 
-function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findImages, fixLength, fill, remove }: Props & { i: number }) {
+function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findImages, fixLength, fill, remove, clipFor }: Props & { i: number }) {
   const s = plan.scenes[i]
   const propErr = usePropError(plan.style === '3d' ? s.prop : null)
   const set = (patch: Partial<SceneData>) => change({ ...plan, scenes: plan.scenes.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
@@ -115,11 +116,32 @@ function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findIma
         onDragOver={(e) => { e.preventDefault(); setDropping(true) }} onDragLeave={() => setDropping(false)}
         onDrop={(e) => {
           e.preventDefault(); setDropping(false)
-          try { const it = JSON.parse(e.dataTransfer.getData('text/plain')); if (it.type === 'asset') { snapshot(); set({ asset: it.url }) } } catch { /* not a library tile */ }
+          try {
+            const it = JSON.parse(e.dataTransfer.getData('text/plain'))
+            if (it.type === 'asset') { snapshot(); set({ asset: it.url }) }
+            if (it.type === 'clip') clipFor(i, it)
+          } catch { /* not a library tile */ }
         }}>
-        {s.media?.type === 'video' ? <p className="tip">Video: {s.media.name ?? s.media.url}</p>
-          : s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">Drop an image from the Asset Library here.</p>}
+        {s.media?.type === 'video' ? (
+          // #t= media fragment previews just the trimmed slice in the browser's own player
+          <video key={`${s.media.url}${s.media.trimStart}`} className="seg-img" src={`${s.media.url}#t=${s.media.trimStart ?? 0},${s.media.trimEnd ?? ''}`} controls muted preload="metadata" />
+        ) : s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">Drop an image or video clip from the Asset Library here.</p>}
       </div>
+      {s.media?.type === 'video' && (
+        <>
+          <div className="row times">
+            <label>Trim in<input type="number" step={0.1} min={0} max={s.media.duration} value={s.media.trimStart ?? 0} aria-label="Trim start, seconds into the clip"
+              onChange={(e) => e.target.value && set({ media: { ...s.media!, trimStart: Math.max(0, Math.min(Number(e.target.value), (s.media!.trimEnd ?? 1e9) - 0.2)) } })} /></label>
+            <label>Trim out<input type="number" step={0.1} min={0} max={s.media.duration} value={s.media.trimEnd ?? s.media.duration ?? 0} aria-label="Trim end, seconds into the clip"
+              onChange={(e) => e.target.value && set({ media: { ...s.media!, trimEnd: Math.min(s.media!.duration ?? 1e9, Math.max(Number(e.target.value), (s.media!.trimStart ?? 0) + 0.2)) } })} /></label>
+            <small className="tip">{s.media.name}{s.media.duration ? ` · ${s.media.duration.toFixed(1)}s clip` : ''}</small>
+          </div>
+          <div className="row">
+            <button onClick={() => { snapshot(); set({ length: round1((s.media!.trimEnd ?? 0) - (s.media!.trimStart ?? 0)) }) }}>Fit duration to trim</button>
+            <button className="link" onClick={() => { snapshot(); set({ media: null }) }}>Remove clip</button>
+          </div>
+        </>
+      )}
       <div className="row">
         <button onClick={() => findImages(`${plan.title} ${s.headline || s.title || ''}`.trim(), i)} disabled={!!busy}>{busy === `find-${i}` ? 'Searching the web…' : 'Find images for this segment'}</button>
         {s.asset && <button className="link" onClick={() => { snapshot(); set({ asset: '' }) }}>Remove</button>}

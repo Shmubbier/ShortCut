@@ -23,7 +23,7 @@ export type SceneData = {
   purpose?: string; voiceover?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
 }
 export type Plan = {
-  title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; voice?: string
+  title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; captionStyle?: CaptionStyle; voice?: string
   music?: Track | null; musicOptions?: string[]; musicWhy?: string; styleOptions?: Style[]; styleWhy?: string
   scenes: SceneData[]
 }
@@ -175,19 +175,32 @@ const Shapes2D = ({ t, i }: { t: Theme; i: number }) => {
   )
 }
 
+// Caption appearance (Style panel): where they sit, how big, and the look of the word chunk.
+export type CaptionStyle = { position?: 'bottom' | 'middle' | 'top'; size?: 's' | 'm' | 'l'; look?: 'box' | 'outline' | 'plain' }
+export const CAPTION_LOOKS = { box: 'Dark box', outline: 'Bold outline', plain: 'Plain text' } as const
+
 // Reel-style captions: 3-word chunks, the spoken word lit in the accent colour.
-const Captions = ({ words, t, tall }: { words: Word[]; t: Theme; tall: boolean }) => {
+const Captions = ({ words, t, tall, cs }: { words: Word[]; t: Theme; tall: boolean; cs: CaptionStyle }) => {
   const f = useCurrentFrame()
   const { fps } = useVideoConfig()
   const now = f / fps
   const i = words.findIndex((w) => now < w.end)
   if (i < 0 || now < words[0].start) return null
   const chunk = Math.floor(i / 3) * 3
+  const pos = cs.position ?? 'bottom'
+  const size = (tall ? 64 : 56) * { s: 0.75, m: 1, l: 1.3 }[cs.size ?? 'm']
+  const look = cs.look ?? 'box'
+  const lookStyle = {
+    box: { background: 'rgba(0,0,0,.72)', color: '#fff', padding: '10px 22px', borderRadius: 14 },
+    outline: { color: '#fff', WebkitTextStroke: `${Math.round(size / 16)}px #000`, paintOrder: 'stroke fill', textShadow: '0 4px 0 rgba(0,0,0,.35)' },
+    plain: { color: t.ink[0] },
+  }[look]
   return (
-    <AbsoluteFill style={{ justifyContent: 'flex-end', alignItems: 'center', paddingBottom: tall ? '14%' : '6%', pointerEvents: 'none' }}>
-      <div style={{ display: 'flex', gap: '0.3em', fontFamily: stack(t.display), fontWeight: 800, fontSize: tall ? 64 : 56, textTransform: 'uppercase', background: 'rgba(0,0,0,.72)', color: '#fff', padding: '10px 22px', borderRadius: 14 }}>
+    <AbsoluteFill style={{ justifyContent: { bottom: 'flex-end', middle: 'center', top: 'flex-start' }[pos], alignItems: 'center',
+      padding: pos === 'middle' ? 0 : pos === 'top' ? (tall ? '16% 0 0' : '6% 0 0') : (tall ? '0 0 14%' : '0 0 6%'), pointerEvents: 'none' }}>
+      <div style={{ display: 'flex', gap: '0.3em', fontFamily: stack(t.display), fontWeight: 800, fontSize: size, textTransform: 'uppercase', ...lookStyle }}>
         {words.slice(chunk, chunk + 3).map((w, k) => (
-          <span key={k} style={{ color: chunk + k === i && now >= w.start ? t.accent : '#fff' }}>{w.text}</span>
+          <span key={k} style={{ color: chunk + k === i && now >= w.start ? t.accent : undefined }}>{w.text}</span>
         ))}
       </div>
     </AbsoluteFill>
@@ -229,7 +242,7 @@ const SceneBody = ({ s, t, ink }: { s: SceneData; t: Theme; ink: string }) => {
   )
 }
 
-const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; len: number; captions: boolean }) => {
+const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; len: number; captions: CaptionStyle | null }) => {
   const f = useCurrentFrame()
   const { width, height } = useVideoConfig()
   const tall = height >= width
@@ -272,7 +285,7 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
       {fx.includes('vignette') && <AbsoluteFill style={{ background: 'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%)' }} />}
       {flash > 0 && <AbsoluteFill style={{ background: '#fff', opacity: flash }} />}
       {s.audio?.url && <Audio src={s.audio.url} />}
-      {captions && s.words?.length ? <Captions words={s.words} t={t} tall={tall} /> : null}
+      {captions && s.words?.length ? <Captions words={s.words} t={t} tall={tall} cs={captions} /> : null}
     </AbsoluteFill>
   )
 }
@@ -316,7 +329,7 @@ export const Main = (p: Plan) => {
         const len = sceneLen(s, p.pace)
         return (
           <Sequence key={s.id ?? i} from={starts[i]} durationInFrames={len}>
-            <Shot s={{ ...s, effects: s.effects ?? [] }} t={t} i={i} len={len} captions={p.captions !== false} />
+            <Shot s={{ ...s, effects: s.effects ?? [] }} t={t} i={i} len={len} captions={p.captions !== false ? (p.captionStyle ?? {}) : null} />
           </Sequence>
         )
       })}

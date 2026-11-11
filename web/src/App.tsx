@@ -9,7 +9,9 @@ import './App.css'
 import './studio.css'
 
 type Asset = { url: string; name: string; source?: string }
-type Item = Tile | { type: 'asset'; url: string; name: string }
+type Clip = { url: string; name: string; duration?: number } // uploaded video footage (spec §11)
+type Passage = { start: number; end: number; text: string }
+type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'clip'; url: string; name: string; duration?: number }
 type Msg = { who: 'you' | 'ai'; text: string; scope: string }
 type PanelId = 'assets' | 'script' | 'style' | 'settings'
 // Real generation stages (spec §4A): the bar advances when a stage actually finishes, not on a timer.
@@ -19,6 +21,7 @@ async function api(path: string, body?: unknown) {
   const r = await fetch(path, body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) })
   const text = await r.text()
   if (!text) throw new Error('API server not running — start it with: .venv/Scripts/python server.py')
+  if (!r.ok && !text.trimStart().startsWith('{')) throw new Error(`${r.status} ${r.statusText}`) // e.g. an HTML 404 for a route that doesn't exist yet
   const j = JSON.parse(text)
   if (!r.ok) throw new Error(j.error)
   return j
@@ -34,7 +37,9 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // The project survives refreshes: plan + assistant history live in this browser (spec acceptance: assets stay accessible).
 const SAVE_KEY = 'blockcut.project.v1'
-const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[] } | null } catch { return null } })()
+const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
+// Footage endpoints are built on the server side (HANDOFF.md, Codex brief); a 404 means that part isn't installed yet.
+const FOOTAGE_MISSING = 'Video footage needs the footage server endpoints (in progress). Images and AI generation work now.'
 
 const ICONS: Record<PanelId, { label: string; path: string }> = {
   assets: { label: 'Asset Library', path: 'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01' },
@@ -65,6 +70,8 @@ export default function App() {
   const [findQuery, setFindQuery] = useState('')
   const [autoImages, setAutoImages] = useState(true)
   const [assetMsg, setAssetMsg] = useState('')
+  const [clips, setClips] = useState<Clip[]>(saved?.clips ?? [])
+  const [footage, setFootage] = useState<{ clip: Clip; passages: Passage[] } | null>(null) // transcript awaiting review
   const player = useRef<PlayerRef>(null)
   const planRef = useRef(plan)
   planRef.current = plan
@@ -72,8 +79,8 @@ export default function App() {
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}) }, [])
   useEffect(() => { // autosave (skipped mid-reveal so a refresh can't save a half-shown storyboard)
     if (gen) return
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ plan, log: log.slice(-60) })) } catch { /* storage full or blocked */ }
-  }, [plan, log, gen])
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ plan, log: log.slice(-60), clips })) } catch { /* storage full or blocked */ }
+  }, [plan, log, gen, clips])
 
   // History: discrete actions (setPlan) always get an undo step; live edits (change) start a new step after a
   // 1 s pause, so a burst of typing in one field undoes in one go.
@@ -106,6 +113,7 @@ export default function App() {
     if (it.type === 'transition') patchScene(i, (s) => ({ ...s, transition: it.name }))
     if (it.type === 'effect') patchScene(i, (s) => (s.effects.includes(it.name) ? s : { ...s, effects: [...s.effects, it.name] }))
     if (it.type === 'asset') patchScene(i, (s) => ({ ...s, asset: it.url }))
+    if (it.type === 'clip') patchScene(i, (s) => assignClip(s, it))
     select(i)
   }
 
@@ -116,6 +124,63 @@ export default function App() {
     scenes.splice(to, 0, moved)
     setPlan({ ...plan, scenes })
     select(to)
+  }
+
+  // A clip on a segment: the segment becomes footage, trimmed to its current length (or the whole clip if shorter).
+  const assignClip = (s: SceneData, c: Clip): SceneData => {
+    const len = s.length ?? 5
+    const end = Math.round((c.duration ? Math.min(c.duration, len) : len) * 10) / 10
+    return { ...s, role: 'footage', media: { type: 'video', url: c.url, name: c.name, duration: c.duration, trimStart: 0, trimEnd: end }, length: Math.max(1, end) }
+  }
+  const footageError = (e: unknown) => setAssetMsg(/404|Not Found/i.test(String(e)) ? FOOTAGE_MISSING : errText(e))
+
+  // Footage workflow (spec §3B): upload -> transcript (editable) -> storyboard. Endpoints per HANDOFF.md.
+  async function uploadClip(f: File, transcribe = false) {
+    setBusy('upload')
+    setAssetMsg(`Uploading ${f.name}…`)
+    try {
+      const c: Clip = await api('/api/footage/upload', { name: f.name, data: await readDataUrl(f) })
+      setClips((cs) => [...cs, c])
+      setAssetMsg(`Added ${c.name}`)
+      setBusy('')
+      if (transcribe) await transcribeClip(c)
+    } catch (e) {
+      footageError(e)
+      setBusy('')
+    }
+  }
+  async function transcribeClip(c: Clip) {
+    setBusy('transcribe')
+    setPanel('assets')
+    try {
+      const r: { segments: Passage[] } = await api('/api/footage/transcribe', { url: c.url })
+      setFootage({ clip: c, passages: r.segments.map((x) => ({ start: x.start, end: x.end, text: x.text.trim() })) })
+    } catch (e) {
+      footageError(e)
+    } finally {
+      setBusy('')
+    }
+  }
+  async function storyboardFromFootage() {
+    if (!footage) return
+    if (plan && !confirm('Build a new storyboard from this footage? It replaces the current video (Undo can bring it back).')) return
+    const stages = ['Grouping the transcript into scenes', 'Building the storyboard', 'Preparing the preview']
+    setBusy('gen'); setGen({ stages, at: 0 })
+    try {
+      const p: Plan & { note?: string } = await api('/api/footage/storyboard', { url: footage.clip.url, transcript: footage.passages, style, aspect })
+      setGen({ stages, at: 1 })
+      setReveal(0); setPreviewIn(false)
+      setPlan(p)
+      for (let k = 1; k <= p.scenes.length; k++) { await wait(260); setReveal(k) }
+      setGen({ stages, at: 2 })
+      await wait(150); setPreviewIn(true); await wait(400)
+      say('ai', p.note ?? `Built ${p.scenes.length} segments from ${footage.clip.name}.`, 'Footage')
+      setFootage(null)
+    } catch (e) {
+      footageError(e)
+    } finally {
+      setReveal(Infinity); setGen(null); setBusy('')
+    }
   }
 
   // Segment management (spec §9): insert an empty segment exactly here; delete with an undo toast.
@@ -282,11 +347,11 @@ export default function App() {
     title: sel !== null ? `Apply to segment ${sel + 1}` : 'Drag onto a segment',
   })
 
-  const started = !!plan || !!gen
+  const started = !!plan || !!gen || !!footage || busy === 'upload' || busy === 'transcribe'
   const selEmpty = plan && sel !== null && plan.scenes[sel] ? isEmpty(plan.scenes[sel]) : false
   const busyLabel = gen ? gen.stages[Math.min(gen.at, gen.stages.length - 1)]
     : busy === 'ai' ? 'Applying your edit…' : busy === 'voice-all' ? 'Voicing all segments…' : busy.startsWith('voice-') ? 'Voicing the segment…'
-      : busy.startsWith('find') ? 'Searching the web for images…' : ''
+      : busy.startsWith('find') ? 'Searching the web for images…' : busy === 'upload' ? 'Uploading footage…' : busy === 'transcribe' ? 'Transcribing the footage (Whisper)…' : ''
   const curAspect = plan?.aspect ?? aspect
   const { w, h } = ASPECTS[curAspect]
 
@@ -315,7 +380,35 @@ export default function App() {
         {!assets.length && <p className="tip span">Find images for a topic, drop or upload your own, or grab them from a page. Found images are other people's work: check you can use them.</p>}
       </div>
       {assetMsg && <p className="tip">{assetMsg}</p>}
-      <p className="tip">Drag an image onto a storyboard card or the inspector's Media box. The same image can go on several segments. Video upload is coming with the footage workflow.</p>
+
+      <h3>Video footage</h3>
+      <label className="upload">{busy === 'upload' ? 'Uploading…' : 'Upload a video clip'}
+        <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f); e.target.value = '' }} hidden disabled={!!busy} /></label>
+      {footage && (
+        <div className="footage-review">
+          <b>Transcript of {footage.clip.name}</b>
+          <small className="tip">Fix any misheard words, then build the storyboard. Each passage keeps its timestamps.</small>
+          {footage.passages.map((p, k) => (
+            <label key={k}>{p.start.toFixed(1)}s–{p.end.toFixed(1)}s
+              <textarea rows={2} value={p.text} onChange={(e) => setFootage({ ...footage, passages: footage.passages.map((x, j) => (j === k ? { ...x, text: e.target.value } : x)) })} />
+            </label>
+          ))}
+          <div className="row">
+            <button onClick={storyboardFromFootage} disabled={!!busy}>Build storyboard from footage</button>
+            <button className="link" onClick={() => setFootage(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <div className="clips">
+        {clips.map((c) => (
+          <div key={c.url} className="clip" {...tileProps({ type: 'clip', url: c.url, name: c.name, duration: c.duration })}>
+            <video src={c.url} muted preload="metadata" />
+            <span>{c.name}{c.duration ? ` · ${c.duration.toFixed(1)}s` : ''}</span>
+            <button className="link" onClick={(e) => { e.stopPropagation(); transcribeClip(c) }} disabled={!!busy}>Transcribe → storyboard</button>
+          </div>
+        ))}
+      </div>
+      <p className="tip">Drag an image or clip onto a storyboard card or the inspector's Media box. The same asset can go on several segments.</p>
     </>
   )
 
@@ -370,6 +463,9 @@ export default function App() {
               <label className="check-row"><input type="checkbox" checked={autoImages} onChange={(e) => setAutoImages(e.target.checked)} /> Find topic images</label>
               <button onClick={send} disabled={!!busy || !input.trim()}>Generate ✦</button>
             </div>
+            <label className="hero-footage">or start from your own video clip
+              <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
+            {assetMsg && <p className="tip">{assetMsg}</p>}
           </div>
         )}
 
@@ -435,7 +531,8 @@ export default function App() {
           findImages={findImages}
           fixLength={(i, sec) => prompt(`This segment is fixed at ${sec.toFixed(1)} seconds. Rewrite its voiceover so it takes about ${sec.toFixed(1)} seconds to say (about ${Math.max(3, Math.round(sec * 2.5))} words), keeping the meaning. Keep everything else.`, i)}
           fill={(i) => prompt('This segment is empty. Write it so it fits between the segments before and after it: title, role, narration, on-screen headline and subline, and a fitting transition and effects.', i)}
-          remove={remove} />
+          remove={remove}
+          clipFor={(i, c) => patchScene(i, (s) => assignClip(s, c))} />
       )}
       {plan && !inspOpen && sel !== null && (
         <button className="insp-reopen" onClick={() => setInspOpen(true)} aria-label="Open inspector" title="Open inspector">‹</button>

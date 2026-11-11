@@ -55,8 +55,16 @@ The team's spec (prompt → storyboard editor, plus footage upload → transcrip
 
 ### Codex brief: phase 4 (footage + export)
 
-Everything below is server or renderer work. The UI side (an upload button in the Assets panel, a trim control in the
-inspector) is Claude's: **expose these endpoints and Claude will wire the UI to them.**
+Everything below is server or renderer work. **The UI is already wired to these exact endpoints** (commit "Footage UI"):
+- **Upload buttons:** the Asset Library ("Upload a video clip") and the hero ("or start from your own video clip").
+- **Transcript review:** an editable list of passages with timestamps, then "Build storyboard from footage".
+- **Clip tiles:** drag a clip onto a card or onto the inspector's Media box. That sets
+  `media: {type:'video', url, name, duration, trimStart: 0, trimEnd}`, `role: 'footage'` and `length`.
+- **Inspector trim:** "Trim in" and "Trim out" inputs, "Fit duration to trim", and a `#t=` browser preview of the slice.
+
+Until a route exists, the UI shows "Video footage needs the footage server endpoints" (any HTTP 404). **Codex: build the endpoints
+and the renderer exactly to the shapes below, and the buttons start working.** Uploaded clips are remembered in the browser
+(`localStorage` key `blockcut.project.v1`, field `clips`), so `upload` must return a stable `url`.
 
 1. `POST /api/footage/upload {name, data: dataURL}` → save to `web/public/footage/<slug>.mp4` (allow mp4/webm/mov; cap ~200 MB),
    serve it at `/footage/<file>` (add it to the static prefixes in `Handler.do_GET`; git-ignore the folder), and return
@@ -78,7 +86,13 @@ inspector) is Claude's: **expose these endpoints and Claude will wire the UI to 
 ### Claude's phases 1-3: DONE (browser-verified, see below)
 All six items below are built. Verified: real generation stages, card-by-card reveal, preview slide-in, inspector persistence and
 collapse, two-way transcript/inspector sync, + insert / delete / undo, Fill with AI on an empty segment, start/end edits shifting
-later segments, autosave restore after reload. **Upload hooks for Codex's footage endpoints are not wired yet** (Assets panel and inspector Media box).
+later segments, autosave restore after reload, New video → hero → exit animation → reveal.
+**Also done after that:**
+- **Footage UI** (above): clip drop, trim and fit verified with a stand-in clip; upload shows the honest 404 message.
+- **Caption appearance** in the Style panel: position, size and look (dark box, bold outline, plain); the outline-top look was verified in the preview.
+
+**Left for whoever picks up the UI next (small):** a duration stepper on the card itself (it's in the inspector today), a
+"default transition" apply-to-all control, and keyboard shortcuts (Delete, Esc to deselect). None of these block the demo.
 
 Original queue:
 1. Centred first prompt that minimises into a floating assistant icon (jiggles while working); bottom progress bar driven by real stages.
