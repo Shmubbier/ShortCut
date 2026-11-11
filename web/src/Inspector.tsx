@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Recipe } from './video/bench3d/recipe'
 import { build, loadWasm } from './video/Stage3D'
 import { FONTS, PALETTES, STYLES, resolveTheme } from './video/theme'
-import { FPS, IMPORTANCE, sceneLen, timing, type Importance, type Plan, type SceneData } from './video/Video'
+import { FPS, IMPORTANCE, MAX_LEN, MIN_LEN, OVERLAP, sceneLen, timing, type Importance, type Plan, type SceneData, type Track } from './video/Video'
 
 export const VOICES = [
   ['en-US-AndrewNeural', 'Andrew · US'], ['en-US-AvaNeural', 'Ava · US'], ['en-GB-RyanNeural', 'Ryan · UK'],
@@ -20,6 +20,7 @@ type Props = {
   busy: string
   fixProp: (i: number, error: string) => void
   findImages: (query: string, assignTo: number | null) => void
+  fixLength: (i: number, seconds: number) => void // ask the AI to rewrite a segment's voiceover to fit a fixed length
 }
 
 // 3D prop build errors, checked with the same builder the renderer uses.
@@ -53,6 +54,20 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
       <label>Title<input value={plan.title} onChange={(e) => change({ ...plan, title: e.target.value })} /></label>
 
       <h3>Look</h3>
+      {plan.styleOptions?.length ? (
+        <div className="recs">
+          <span className="rec-label">Style · AI pick first</span>
+          <div className="chips-row">
+            {plan.styleOptions.map((st, k) => (
+              <button key={st} className={plan.style === st ? 'rec on' : 'rec'} onClick={() => { snapshot(); change({ ...plan, style: st }) }}>
+                {k === 0 ? '★ ' : ''}{STYLES[st].label}
+              </button>
+            ))}
+          </div>
+          {plan.styleWhy && <small className="tip">{plan.styleWhy}</small>}
+          {plan.style === '3d' && !plan.scenes.some((x) => x.prop) && <small className="tip">No 3D props yet: ask “add 3D props” in the prompt.</small>}
+        </div>
+      ) : null}
       <label>Pace
         <select value={plan.pace} onChange={(e) => { snapshot(); change({ ...plan, pace: e.target.value as Plan['pace'] }) }}>
           <option value="punchy">Punchy</option><option value="documentary">Documentary</option>
@@ -82,6 +97,8 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
       </div>
       {plan.theme && <button className="link" onClick={() => { snapshot(); change({ ...plan, theme: undefined }) }}>Reset to style defaults</button>}
 
+      <MusicPanel plan={plan} change={change} snapshot={snapshot} />
+
       <h3>Voice & captions</h3>
       <label>Narrator
         <select value={plan.voice ?? VOICES[0][0]} onChange={(e) => { snapshot(); change({ ...plan, voice: e.target.value }) }}>
@@ -105,7 +122,46 @@ function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
   )
 }
 
-function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp, findImages }: Props & { i: number }) {
+// Music: the AI's pick and its runners-up as one-click recommendations, the full library, volume, or none.
+function MusicPanel({ plan, change, snapshot }: Pick<Props, 'plan' | 'change' | 'snapshot'>) {
+  const [library, setLibrary] = useState<Track[]>([])
+  useEffect(() => { fetch('/api/music').then((r) => r.json()).then(setLibrary).catch(() => {}) }, [])
+  const byId = Object.fromEntries(library.map((m) => [m.id, m]))
+  const pick = (id: string) => { const m = byId[id]; if (m) { snapshot(); change({ ...plan, music: { ...m, volume: plan.music?.volume ?? 0.5 } }) } }
+  const recs = (plan.musicOptions ?? []).filter((id) => byId[id])
+  return (
+    <>
+      <h3>Music{plan.music ? ` · ${plan.music.title}` : ''}</h3>
+      {recs.length > 0 && (
+        <div className="recs">
+          <span className="rec-label">Recommended · AI pick first</span>
+          <div className="chips-row">
+            {recs.map((id, k) => (
+              <button key={id} className={plan.music?.id === id ? 'rec on' : 'rec'} onClick={() => pick(id)} title={byId[id].mood}>
+                {k === 0 ? '★ ' : ''}{byId[id].title}
+              </button>
+            ))}
+          </div>
+          {plan.musicWhy && <small className="tip">{plan.musicWhy}</small>}
+        </div>
+      )}
+      <div className="row">
+        <label>Track
+          <select value={plan.music?.id ?? ''} onChange={(e) => (e.target.value ? pick(e.target.value) : (snapshot(), change({ ...plan, music: null })))}>
+            <option value="">No music</option>
+            {library.map((m) => <option key={m.id} value={m.id}>{m.title} · {m.bpm} bpm</option>)}
+          </select>
+        </label>
+        {plan.music && <label>Volume<input type="range" min={0} max={1} step={0.05} value={plan.music.volume ?? 0.5}
+          onChange={(e) => change({ ...plan, music: { ...plan.music!, volume: Number(e.target.value) } })} /></label>}
+      </div>
+      {plan.music && <audio key={plan.music.url} src={plan.music.url} controls preload="none" className="music-preview" />}
+      <small className="tip">Original loops made by Blockcut (royalty-free). Music dips automatically under the voiceover.</small>
+    </>
+  )
+}
+
+function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp, findImages, fixLength }: Props & { i: number }) {
   const s = plan.scenes[i]
   const propErr = usePropError(plan.style === '3d' ? s.prop : null)
   const set = (patch: Partial<SceneData>) => change({ ...plan, scenes: plan.scenes.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
@@ -143,12 +199,31 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp,
           <button key={lv} className={(s.importance ?? 2) === lv ? 'on' : ''} onClick={() => { snapshot(); set({ importance: lv }) }}>{IMPORTANCE[lv].label}</button>
         ))}
       </div>
+      <label className="len-row">Exact length
+        <div className="row">
+          <input type="range" min={MIN_LEN} max={MAX_LEN} step={0.1} value={s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS}
+            onChange={(e) => set({ length: Number(e.target.value) })} aria-label="Segment length in seconds" />
+          <input type="number" min={MIN_LEN} max={MAX_LEN} step={0.1} className="secs-in" value={Number((s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS).toFixed(1))}
+            onChange={(e) => e.target.value && set({ length: Math.min(MAX_LEN, Math.max(MIN_LEN, Number(e.target.value))) })} aria-label="Segment length, seconds" />
+          {s.length ? <button className="link" onClick={() => { snapshot(); set({ length: null }) }}>Auto</button> : null}
+        </div>
+      </label>
       <small className="tip">{(() => {
         const t = timing(s, plan.pace)
+        if (t.source === 'manual') return `Fixed at ${s.length?.toFixed(1)}s by you. Importance no longer changes it; press Auto to go back.`
         return t.source === 'voice'
-          ? `${secs(t.voice)} of voiceover + ${secs(t.hold)} hold for a ${IMPORTANCE[s.importance ?? 2].label.toLowerCase()} beat.`
-          : `From ${t.words} words of on-screen script, ×${IMPORTANCE[s.importance ?? 2].scale} for importance. Generate the voice to time it to the narration.`
+          ? `${secs(t.voice)} of voiceover + ${secs(t.hold)} hold for a ${IMPORTANCE[s.importance ?? 2].label.toLowerCase()} beat. Drag the slider to set an exact length.`
+          : `From ${t.words} words of on-screen script, ×${IMPORTANCE[s.importance ?? 2].scale} for importance. Drag the slider to set an exact length.`
       })()}</small>
+      {timing(s, plan.pace).cutsVoice && s.length && (
+        <div className="warn">
+          The voiceover runs {secs(timing(s, plan.pace).voice)}, longer than {s.length.toFixed(1)}s, so it'll be cut off.
+          <div className="row">
+            <button onClick={() => fixLength(i, s.length!)} disabled={!!busy}>Shorten the line to fit</button>
+            <button className="link" onClick={() => { snapshot(); set({ length: Math.ceil((timing(s, plan.pace).voice / FPS) * 10) / 10 + 0.3 }) }}>Use the voice's length</button>
+          </div>
+        </div>
+      )}
 
       <h3>Image</h3>
       {s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">No image on this segment.</p>}

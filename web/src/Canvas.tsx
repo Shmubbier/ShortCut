@@ -184,7 +184,7 @@ export function Canvas(props: Props) {
                 frameToDisplay={starts[i] + 30} durationInFrames={planDuration(plan)} fps={FPS} style={{ width: '100%', pointerEvents: 'none' }} />
               <p>{s.value && <b>{s.value} </b>}{s.headline}</p>
               {/* Timing: length vs the longest segment, coloured by importance; dots set importance */}
-              <div className={`meter imp${s.importance ?? 2}`} title={`${(lens[i].frames / FPS).toFixed(1)}s · ${lens[i].source === 'voice' ? 'from the voiceover' : 'from script length'} · ${IMPORTANCE[s.importance ?? 2].label}`}>
+              <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${(lens[i].frames / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
                 <span className="secs">{(lens[i].frames / FPS).toFixed(1)}s</span>
                 <span className="bar"><i style={{ width: `${(lens[i].frames / longest) * 100}%` }} /></span>
                 <span className="pips" onPointerDown={(e) => e.stopPropagation()}>

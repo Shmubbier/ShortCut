@@ -157,3 +157,15 @@ header select, .ghost { border: 1.5px solid var(--ink); background: #fff8ef; bor
 .seglist .bar i.imp1 { background: #9a958c; }
 .check-row { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .seg-img { width: 100%; max-height: 140px; object-fit: cover; border: 1.5px solid var(--ink); border-radius: 8px; }
+
+/* Recommendations (style + music) and exact segment length */
+.recs { display: flex; flex-direction: column; gap: 5px; }
+.rec-label { font-size: 11px; font-weight: 700; color: var(--muted); }
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.inspector .rec { background: #fff8ef !important; color: var(--ink) !important; border: 1.5px solid var(--ink) !important; border-radius: 999px !important; padding: 4px 10px !important; font-size: 12px !important; }
+.inspector .rec.on { background: var(--ink) !important; color: var(--paper) !important; }
+.music-preview { width: 100%; height: 32px; }
+.len-row input[type=range] { flex: 1; }
+.inspector input.secs-in { width: 64px; }
+.warn { background: #fff1e6; border: 1.5px solid var(--accent); border-radius: 8px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.meter.manual .bar { outline: 1.5px dashed var(--ink); outline-offset: 1px; }

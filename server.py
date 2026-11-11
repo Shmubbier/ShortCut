@@ -31,6 +31,8 @@ from urllib.parse import unquote, urljoin, urlparse
 
 from pydantic import BaseModel
 
+import music
+
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
 MEDIA = ROOT / "web" / "public" / "media"  # generated voiceover audio
@@ -54,7 +56,8 @@ Every segment also has `purpose` (one line: what this beat does for the viewer) 
 over it: natural spoken sentences, 8-30 words, adds to the on-screen text instead of reading it out).
 `importance` sets how long a beat lingers: 3 = key beat (the hook, the biggest number, the payoff; give it room),
 2 = normal, 1 = quick connective beat (keep it brisk). Most segments are 2; use 3 for at most a third of them.
-Match line length to importance: key beats can carry a longer voiceover, quick beats a short one."""
+Match line length to importance: key beats can carry a longer voiceover, quick beats a short one.
+A segment with `length` (seconds) has a length the user fixed: fit its voiceover to about 2.5 spoken words per second."""
 
 VOCAB = (ROOT / "bench3d" / "modelgen" / "VOCAB.md").read_text(encoding="utf-8")
 EXAMPLE_PROP = (ROOT / "bench3d" / "modelgen" / "props" / "boar_rider.json").read_text(encoding="utf-8")
@@ -85,10 +88,47 @@ class Scene(BaseModel):
     prop_json: str  # 3D recipe JSON, "" for none, "keep" to leave the current prop unchanged
 
 
+MUSIC = music.ensure_library()  # renders the original loops on first start (~5 s)
+MUSIC_BY_ID = {m["id"]: m for m in MUSIC}
+StyleId = Literal["editorial", "pixel", "2d", "3d"]
+PaletteId = Literal["paper", "ube", "jeepney", "pop", "night", "arcade", "mono"]  # keep in sync with web/src/video/theme.ts
+MusicId = Literal[tuple(MUSIC_BY_ID)]  # type: ignore[valid-type]
+
+DIRECTION_GUIDE = """Visual + sound direction (the `direction` field):
+Styles: editorial = paper-magazine collage (explainers, culture, food, history, news);
+2d = flat bouncy motion graphics (playful, lifestyle, how-to, kids, upbeat brands);
+pixel = retro 8-bit (games, internet culture, nostalgia, tech); 3d = low-poly 3D props (games, products, objects, places).
+Palettes: paper (cream, ink, red), ube (purples), jeepney (yellow, blue, red; Filipino street), pop (bright flat colours),
+night (dark, moody), arcade (dark retro neon), mono (black and white).
+Music library (id: title, mood, bpm):
+""" + "\n".join(f"- {m['id']}: {m['title']}, {m['mood']}, {m['bpm']} bpm" for m in MUSIC) + """
+Pick the style, palette and track that best fit the topic and tone; list 2 runner-up styles and 2-3 runner-up tracks
+you'd also consider (not repeating the pick), and say why in one short line each."""
+
+
+class Direction(BaseModel):
+    style: StyleId
+    palette: PaletteId
+    style_alternatives: list[StyleId]
+    style_why: str
+    music: MusicId
+    music_alternatives: list[MusicId]
+    music_why: str
+
+
 class Script(BaseModel):
     title: str
+    direction: Direction
     scenes: list[Scene]
     note: str  # one short sentence to the user about what you did
+
+
+def direction_fields(d: Direction, volume: float = 0.5) -> dict:
+    """Claude's picks -> plan fields; the runners-up become the recommendations shown in the editor."""
+    alts = [x for x in d.style_alternatives if x != d.style][:2]
+    malts = [x for x in d.music_alternatives if x != d.music][:3]
+    return {"style": d.style, "theme": {"palette": d.palette}, "styleOptions": [d.style, *alts], "styleWhy": d.style_why,
+            "music": {**MUSIC_BY_ID[d.music], "volume": volume}, "musicOptions": [d.music, *malts], "musicWhy": d.music_why}
 
 
 class SceneEdit(BaseModel):
@@ -204,11 +244,12 @@ def context(plan: dict, full_prop_index=None) -> str:
     """Plan as Claude sees it: props are summarised (they're big) except the one being edited."""
     scenes = []
     for i, s in enumerate(plan["scenes"]):
-        c = {k: s.get(k) for k in ("kind", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance")}
+        c = {k: s.get(k) for k in ("kind", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance", "length")}
         if s.get("prop"):
             c["prop"] = json.dumps(s["prop"]) if i == full_prop_index else f"<3D prop '{s['prop'].get('name')}'; return \"keep\" to keep it>"
         scenes.append(c)
-    return json.dumps({"title": plan["title"], "style": plan.get("style"), "scenes": scenes}, ensure_ascii=False)
+    current = {"style": plan.get("style"), "palette": (plan.get("theme") or {}).get("palette"), "music": (plan.get("music") or {}).get("id")}
+    return json.dumps({"title": plan["title"], "direction": current, "scenes": scenes}, ensure_ascii=False)
 
 
 def to_scene(s: Scene, old: dict | None = None) -> dict:
@@ -231,8 +272,15 @@ def to_scene(s: Scene, old: dict | None = None) -> dict:
             "audio": old.get("audio") if same_line else None, "words": old.get("words", []) if same_line else []}
 
 
-def style_text(style: str) -> str:
+def prop_text(style: str) -> str:
     return PROP_GUIDE if style == "3d" else "Set `prop_json` to \"\" everywhere (not the 3D style)."
+
+
+def style_text(style: str) -> str:
+    if style == "auto":
+        return f"{DIRECTION_GUIDE}\nChoose the style yourself.\n{PROP_GUIDE}\nWrite prop_json ONLY if you choose the 3d style; otherwise set it to \"\" everywhere."
+    fixed = f"{DIRECTION_GUIDE}\nThe user chose the {style} style: set direction.style to \"{style}\" (still pick palette and music)."
+    return f"{fixed}\n{PROP_GUIDE}" if style == "3d" else f"{fixed}\nSet `prop_json` to \"\" everywhere (not the 3D style)."
 
 
 def load_env() -> None:
@@ -249,16 +297,18 @@ def create(body: dict) -> dict:
     topic = body.get("topic", "").strip()
     if not topic:
         raise ValueError("Describe what the video is about")
-    meta = {"style": body.get("style", "editorial"), "pace": body.get("pace", "punchy"), "aspect": body.get("aspect", "9:16")}
+    meta = {"style": body.get("style", "auto"), "pace": body.get("pace", "punchy"), "aspect": body.get("aspect", "9:16")}
     mode = backend()
     if not mode:
         sample = find_sample(topic)
-        if sample:  # the sample brings its own style; the user's chosen format still applies
+        if sample:  # the sample brings its own style and music; the user's chosen format still applies
             return {**meta, **sample, "aspect": meta["aspect"], "research": ""}
-        return {**demo_plan(topic, body.get("assets", []), meta["style"]), **meta, "research": ""}
+        style = "editorial" if meta["style"] == "auto" else meta["style"]
+        return {**demo_plan(topic, body.get("assets", []), style), **meta, "style": style, **demo_direction(style), "research": ""}
     notes = research(topic) if mode == "api" else ""  # the CLI path researches with Claude Code's own web search
     fmt = "vertical short-form reel" if meta["aspect"] in ("9:16", "4:5") else "horizontal video"
-    s = ask(f"""Plan a {meta['pace']}-paced {fmt} ({meta['aspect']}, 6-8 segments) in the {meta['style']} visual style.
+    look = "a visual style you choose (see direction below)" if meta["style"] == "auto" else f"the {meta['style']} visual style"
+    s = ask(f"""Plan a {meta['pace']}-paced {fmt} ({meta['aspect']}, 6-8 segments) in {look}.
 Topic / brief: {topic}
 
 Research notes (may be empty; prefer concrete facts and numbers from here):
@@ -268,7 +318,11 @@ Research notes (may be empty; prefer concrete facts and numbers from here):
 {bucket_text(body.get('assets', []))}
 {style_text(meta['style'])}
 Hook in the first segment, payoff in the last. Headlines short and punchy. No hashtags, no emojis.""", Script, research=True)
-    return {"title": s.title, **meta, "scenes": [to_scene(x) for x in s.scenes], "research": notes, "note": s.note}
+    d = s.direction
+    if meta["style"] != "auto":  # respect a style the user picked even if the model drifted
+        d = d.model_copy(update={"style": meta["style"]})
+    return {"title": s.title, **meta, **direction_fields(d), "scenes": [to_scene(x) for x in s.scenes],
+            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why})"}
 
 
 def edit(body: dict) -> dict:
@@ -277,7 +331,7 @@ def edit(body: dict) -> dict:
         raise ValueError("Type what to change")
     if not backend():
         return demo_edit(plan, i, instr)
-    common = f"{EDITING_GUIDE}\n{bucket_text(body.get('assets', []))}\n{style_text(plan.get('style', 'editorial'))}"
+    common = f"{EDITING_GUIDE}\n{bucket_text(body.get('assets', []))}\n{prop_text(plan.get('style', 'editorial'))}"
     if i is not None:
         e = ask(f"""Current video plan (context only):
 {context(plan, full_prop_index=i)}
@@ -294,15 +348,21 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
     s = ask(f"""Current video plan:
 {context(plan)}
 
-{common}
+{EDITING_GUIDE}
+{bucket_text(body.get('assets', []))}
+{DIRECTION_GUIDE}
+{PROP_GUIDE}
+Write prop_json only if direction.style is 3d (otherwise "").
 
 Apply this instruction to the video: "{instr}"
 Leave segments the instruction doesn't concern exactly as they are (prop_json "keep" for unchanged props).
+Keep the current direction (style, palette, music) unless the instruction asks to change the look or the music.
 Add, remove or reorder segments only if asked.""", Script)
     # Match returned segments to old ones by position so ids/audio survive; new segments get new ids.
     old = plan["scenes"]
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
-    return {"plan": {**plan, "title": s.title, "scenes": scenes}, "note": s.note}
+    vol = (plan.get("music") or {}).get("volume", 0.5)
+    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note}
 
 
 SAMPLES = ROOT / "samples"
@@ -323,9 +383,22 @@ def find_sample(topic: str) -> dict | None:
             pf = sc.pop("prop_file", None)
             prop = json.loads((SAMPLES / pf).resolve().read_text(encoding="utf-8")) if pf else None
             scenes.append({"asset": "", "audio": None, "words": [], **sc, "prop": prop})
-        return {**{k: v for k, v in s.items() if k != "keywords"}, "scenes": scenes,
+        return {**{k: v for k, v in s.items() if k != "keywords"}, **demo_direction(s["style"], s.get("music")), "scenes": scenes,
                 "note": f"Demo mode: loaded the handmade “{s['title']}” sample. Hit “Voice all segments” for narration + captions."}
     return None
+
+
+STYLE_MUSIC = {"editorial": ("gentle-doc", "newsroom", "lofi-merienda"), "2d": ("sunny-pop", "tropical-ride", "lofi-merienda"),
+               "pixel": ("pixel-quest", "sunny-pop", "tension"), "3d": ("epic-rise", "pixel-quest", "sunny-pop")}
+
+
+def demo_direction(style: str, track: str | None = None) -> dict:
+    """Music + recommendations without AI: a track that suits the style, the other style-fitting tracks as options."""
+    opts = list(STYLE_MUSIC.get(style, STYLE_MUSIC["editorial"]))
+    if track:
+        opts = [track, *[o for o in opts if o != track]]
+    return {"music": {**MUSIC_BY_ID[opts[0]], "volume": 0.5}, "musicOptions": opts, "musicWhy": "Matched to the style (demo mode).",
+            "styleOptions": [style, *[x for x in ("editorial", "2d", "3d") if x != style][:2]], "styleWhy": "Demo mode."}
 
 
 def demo_plan(topic: str, assets: list, style: str) -> dict:
@@ -619,8 +692,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/assets":
             return self.reply(list_assets(), 200)
+        if self.path == "/api/music":
+            return self.reply(MUSIC, 200)
         # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
-        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA)):
+        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT)):
             if self.path.startswith(prefix):
                 p = folder / Path(unquote(urlparse(self.path).path)).name  # .name keeps us inside the folder
                 if not p.is_file():

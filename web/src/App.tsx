@@ -34,7 +34,7 @@ export default function App() {
   const [log, setLog] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState('') // '' | 'ai' | 'voice-all' | 'voice-<i>'
-  const [style, setStyle] = useState<Style>('editorial')
+  const [style, setStyle] = useState<Style | 'auto'>('auto')
   const [aspect, setAspect] = useState<Aspect>('9:16')
   const [assets, setAssets] = useState<Asset[]>([])
   const [scrapeUrl, setScrapeUrl] = useState('')
@@ -300,8 +300,8 @@ export default function App() {
           <select value={curAspect} onChange={(e) => { const v = e.target.value as Aspect; setAspect(v); if (plan) setPlan({ ...plan, aspect: v }) }} aria-label="Aspect ratio">
             {(Object.keys(ASPECTS) as Aspect[]).map((k) => <option key={k} value={k}>{ASPECTS[k].label}</option>)}
           </select>
-          <select value={curStyle} onChange={(e) => { const v = e.target.value as Style; setStyle(v); if (plan) setPlan({ ...plan, style: v }) }} aria-label="Visual style">
-            {(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}
+          <select value={curStyle} onChange={(e) => { const v = e.target.value as Style | 'auto'; setStyle(v); if (plan && v !== 'auto') setPlan({ ...plan, style: v }) }} aria-label="Visual style">
+            {!plan && <option value="auto">Auto · AI picks the style</option>}{(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}
           </select>
           <button className="ghost" onClick={undo} disabled={!history.length}>Undo</button>
           <button className="ghost" onClick={download} disabled={!plan}>Export plan</button>
@@ -333,7 +333,8 @@ export default function App() {
       {plan && (
         <Inspector plan={plan} sel={sel} setSel={setSel} change={change} snapshot={snapshot} voice={voice} busy={busy}
           fixProp={(i, err) => prompt(`The 3D prop failed to build with this error: ${err}. Fix the recipe, keep the same idea.`, i)}
-          findImages={findImages} />
+          findImages={findImages}
+          fixLength={(i, sec) => prompt(`This segment is fixed at ${sec.toFixed(1)} seconds. Rewrite its voiceover so it takes about ${sec.toFixed(1)} seconds to say (about ${Math.max(3, Math.round(sec * 2.5))} words), keeping the meaning. Keep everything else.`, i)} />
       )}
     </div>
   )

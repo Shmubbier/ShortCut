@@ -8,13 +8,15 @@ export type Transition = 'cut' | 'whip' | 'zoom' | 'slide' | 'flash'
 export type Effect = 'shake' | 'punch' | 'invert' | 'typewriter' | 'highlight' | 'vignette'
 export type Aspect = '16:9' | '9:16' | '1:1' | '4:5'
 export type Word = { text: string; start: number; end: number } // seconds from the segment's audio start
+export type Track = { id: string; title: string; url: string; mood?: string; bpm?: number; volume?: number }
 export type SceneData = {
   id: string; kind: Kind; headline: string; sub: string; value: string; transition: Transition; effects: Effect[]
   asset?: string; prop?: Recipe | null
-  purpose?: string; voiceover?: string; importance?: Importance; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
+  purpose?: string; voiceover?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
 }
 export type Plan = {
   title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; voice?: string
+  music?: Track | null; musicOptions?: string[]; musicWhy?: string; styleOptions?: Style[]; styleWhy?: string
   scenes: SceneData[]
 }
 
@@ -34,7 +36,7 @@ export const ASPECTS: Record<Aspect, { w: number; h: number; label: string }> = 
 export const dims = (p: Plan) => ASPECTS[p.aspect ?? '16:9']
 
 export const FPS = 30
-const OVERLAP = 6 // frames scenes overlap so transitions have something to cover
+export const OVERLAP = 6 // frames scenes overlap so transitions have something to cover
 
 // Editing presets: a human editor varies hold length with how much there is to read and how much the line matters.
 // Length comes from the script (or the voiceover, once generated); importance stretches or tightens it:
@@ -46,15 +48,20 @@ export const IMPORTANCE: Record<Importance, { label: string; scale: number; hold
   2: { label: 'Normal', scale: 1, hold: 12 },
   3: { label: 'Key', scale: 1.3, hold: 30 },
 }
+export const MIN_LEN = 1, MAX_LEN = 20 // seconds, for a length the user sets by hand
 export const timing = (s: SceneData, pace: Plan['pace']) => {
   const imp = IMPORTANCE[s.importance ?? 2] ?? IMPORTANCE[2]
+  const voice = s.audio?.duration ? Math.ceil(s.audio.duration * FPS) : 0
+  if (s.length) { // a fixed length wins; the + OVERLAP keeps "5 s" meaning five seconds on screen after the transition
+    const frames = Math.round(Math.min(MAX_LEN, Math.max(MIN_LEN, s.length)) * FPS) + OVERLAP
+    return { frames, source: 'manual' as const, voice, hold: 0, cutsVoice: voice > frames - OVERLAP / 2 }
+  }
   if (s.audio?.duration) {
-    const voice = Math.ceil(s.audio.duration * FPS)
-    return { frames: Math.max(45, voice + OVERLAP + imp.hold), source: 'voice' as const, voice, hold: imp.hold }
+    return { frames: Math.max(45, voice + OVERLAP + imp.hold), source: 'voice' as const, voice, hold: imp.hold, cutsVoice: false }
   }
   const words = `${s.headline} ${s.sub}`.split(/\s+/).length
   const base = PACE[pace].base + words * PACE[pace].perWord + (s.kind === 'stat' ? 20 : 0) + (s.effects?.includes('typewriter') ? 15 : 0) + (s.prop ? 30 : 0)
-  return { frames: Math.round(base * imp.scale), source: 'script' as const, words, voice: 0, hold: 0 }
+  return { frames: Math.round(base * imp.scale), source: 'script' as const, words, voice: 0, hold: 0, cutsVoice: false }
 }
 export const sceneLen = (s: SceneData, pace: Plan['pace']) => timing(s, pace).frames
 export const sceneStarts = (p: Plan) => {
@@ -276,6 +283,21 @@ const Grain = ({ t }: { t: Theme }) => {
   )
 }
 
+// Background music bed: loops under the whole video, fades in/out, and ducks while the narrator speaks.
+const Music = ({ p, starts }: { p: Plan; starts: number[] }) => {
+  const total = planDuration(p)
+  const speech = p.scenes.flatMap((s, i) => (s.audio?.duration ? [[starts[i], starts[i] + Math.ceil(s.audio.duration * FPS)]] : []))
+  const base = p.music?.volume ?? 0.5
+  if (!p.music?.url) return null
+  return (
+    <Audio src={p.music.url} loop volume={(f) => {
+      const fade = Math.min(1, f / 15, (total - f) / 30)
+      const ducked = speech.some(([a, b]) => f >= a - 6 && f <= b + 6) ? 0.35 : 1 // 0.2 s of lead-in/out around each line
+      return Math.max(0, base * 0.6 * fade * ducked)
+    }} />
+  )
+}
+
 export const Main = (p: Plan) => {
   const t = resolveTheme(p.style, p.theme)
   const starts = sceneStarts(p)
@@ -291,6 +313,7 @@ export const Main = (p: Plan) => {
         )
       })}
       <Grain t={t} />
+      <Music p={p} starts={starts} />
     </AbsoluteFill>
   )
 }

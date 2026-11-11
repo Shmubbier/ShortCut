@@ -21,3 +21,6 @@ web/public/assets/
 
 # secrets
 .env
+
+# generated music loops (music.py renders them on API start)
+web/public/music/
