@@ -75,7 +75,12 @@ inspector) is Claude's: **expose these endpoints and Claude will wire the UI to 
    as a background job; `GET /api/render/<id>` returns `{status, progress, url}`. Serve the finished file under `/renders/`.
 6. Verify with a real 20-60 s clip: upload → transcript → storyboard → preview plays the right slices → MP4 renders with captions.
 
-### Claude's queue (phases 1-3), in order
+### Claude's phases 1-3: DONE (browser-verified, see below)
+All six items below are built. Verified: real generation stages, card-by-card reveal, preview slide-in, inspector persistence and
+collapse, two-way transcript/inspector sync, + insert / delete / undo, Fill with AI on an empty segment, start/end edits shifting
+later segments, autosave restore after reload. **Upload hooks for Codex's footage endpoints are not wired yet** (Assets panel and inspector Media box).
+
+Original queue:
 1. Centred first prompt that minimises into a floating assistant icon (jiggles while working); bottom progress bar driven by real stages.
 2. Staged generation: images → research and writing → storyboard; cards reveal one by one, then the preview slides in.
 3. Inspector slides in from the right on selection, stays until collapsed (chevron), and reopens from a small button.
@@ -84,7 +89,6 @@ inspector) is Claude's: **expose these endpoints and Claude will wire the UI to 
 6. Add a segment between cards, delete with undo, empty-segment state (the assistant highlights), editable start/end timestamps.
 
 ### Still on the general backlog
-- Project persistence (a refresh loses the video). Claude will add `localStorage` save/restore with the UI work.
 - Listen to the music; retune `music.py` recipes if needed.
 - Voice all segments in parallel (thread pool in `voice()`).
 - Demo polish: pre-generate 2 hero topics; keep a sample as the bad-Wi-Fi fallback.

@@ -1,6 +1,6 @@
 import { Thumbnail } from '@remotion/player'
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { dims, EFFECTS, FPS, IMPORTANCE, Main, OVERLAP, planDuration, sceneStarts, timing, TRANSITIONS, type Effect, type Importance, type Plan } from './video/Video'
+import { dims, EFFECTS, FPS, IMPORTANCE, isEmpty, Main, OVERLAP, planDuration, ROLES, sceneStarts, timing, TRANSITIONS, type Effect, type Importance, type Plan } from './video/Video'
 
 type Props = {
   plan: Plan
@@ -12,6 +12,9 @@ type Props = {
   onRemoveEffect: (i: number, e: Effect) => void
   onRemoveAsset: (i: number) => void
   onImportance: (i: number, level: Importance) => void
+  onInsert: (at: number) => void // add an empty segment at this position
+  onDelete: (i: number) => void
+  reveal: number // segments shown so far: cards appear one by one after generation
 }
 type View = { x: number; y: number; z: number }
 type Gesture =
@@ -128,13 +131,21 @@ export function Canvas(props: Props) {
       }}
     >
       <div className="world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
-        {order.slice(1).map((sceneIdx, k) => (
+        {order.slice(1).map((sceneIdx, k) => k + 1 < props.reveal && (
           <div key={`w${k}`} className="wire" style={{ left: k * SLOT + nodeW, top: wireY, width: SLOT - nodeW }}>
             <span>{TRANSITIONS[plan.scenes[sceneIdx].transition]}</span>
+            {!drag && <button className="insert" onPointerDown={(e) => e.stopPropagation()} onClick={() => props.onInsert(k + 1)}
+              aria-label={`Add a segment between ${k + 1} and ${k + 2}`} title="Add a segment here">+</button>}
           </div>
         ))}
+        {!drag && props.reveal >= n && (
+          <button className="insert end" style={{ left: (n - 1) * SLOT + nodeW + 34, top: wireY - 14 }} onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => props.onInsert(n)} aria-label="Add a segment at the end" title="Add a segment at the end">+</button>
+        )}
         {plan.scenes.map((s, i) => {
+          if (i >= props.reveal) return null
           const dragging = drag?.i === i
+          const empty = isEmpty(s)
           const x = dragging ? drag.x : slotOf(i) * SLOT
           const y = dragging ? drag.y : 0
           // Tags float below the card as ovals on curved strings, like nodes hanging off their parent.
@@ -167,7 +178,7 @@ export function Canvas(props: Props) {
               )
             })}
             <div
-              className={`node ${sel === i ? 'sel' : ''} ${over === i ? 'over' : ''} ${dragging ? 'dragging' : ''}`}
+              className={`node ${sel === i ? 'sel' : ''} ${over === i ? 'over' : ''} ${dragging ? 'dragging' : ''} ${empty ? 'empty' : ''}`}
               style={{ width: nodeW, height: cardH, transform: `translate(${x}px, ${y}px)` }}
               onPointerDown={(e) => {
                 if (e.button !== 0) return
@@ -179,10 +190,18 @@ export function Canvas(props: Props) {
               onDragLeave={() => setOver(null)}
               onDrop={(e) => { e.preventDefault(); setOver(null); props.onDropItem(i, e.dataTransfer.getData('text/plain')) }}
             >
-              <div className="nhead"><span>{String(slotOf(i) + 1).padStart(2, '0')}</span><em>{s.kind}</em></div>
-              <Thumbnail component={Main} inputProps={plan} compositionWidth={w} compositionHeight={h}
-                frameToDisplay={starts[i] + 30} durationInFrames={planDuration(plan)} fps={FPS} style={{ width: '100%', pointerEvents: 'none' }} />
-              <p>{s.value && <b>{s.value} </b>}{s.headline}</p>
+              <div className="nhead">
+                <span>{String(slotOf(i) + 1).padStart(2, '0')}</span>
+                <em title={s.role ? ROLES[s.role] : s.kind}>{s.title || (s.role ? ROLES[s.role] : s.kind)}</em>
+                <button className="del-seg" onPointerDown={(e) => e.stopPropagation()} onClick={() => props.onDelete(i)} aria-label={`Delete segment ${i + 1}`} title="Delete segment">×</button>
+              </div>
+              {empty ? (
+                <div className="empty-thumb" style={{ height: thumbH }}>Empty<br /><small>add content</small></div>
+              ) : (
+                <Thumbnail component={Main} inputProps={plan} compositionWidth={w} compositionHeight={h}
+                  frameToDisplay={starts[i] + 30} durationInFrames={planDuration(plan)} fps={FPS} style={{ width: '100%', pointerEvents: 'none' }} />
+              )}
+              <p>{s.value && <b>{s.value} </b>}{s.headline || s.purpose || (empty ? 'Select me, then write or ask the assistant' : '')}</p>
               {/* Timing: length vs the longest segment, coloured by importance; dots set importance */}
               <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
                 <span className="secs">{((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s</span>

@@ -36,9 +36,11 @@ The palette ids in `server.py` (`PaletteId`) must match `PALETTES` in `web/src/v
 | `server.py` | All API routes, prompts (`EDITING_GUIDE`, `DIRECTION_GUIDE`, `PROP_GUIDE`), AI backends, image search, voice and captions, asset bucket, static `/assets` `/media` `/music` |
 | `music.py` | Synthesises 8 original royalty-free loops into `web/public/music/`; `LIBRARY` is what the AI picks from |
 | `samples/*.json` | Handmade demo videos, loaded by keyword when no AI backend is available (`*.prop.json` = 3D props) |
-| `web/src/App.tsx` | App state (plan, undo history, busy states), API calls, left panel, header |
+| `web/src/App.tsx` | App state (plan, undo, autosave to localStorage), staged generation, hero prompt, icon rail, floating assistant, progress bar, add/delete segments |
+| `web/src/Panels.tsx` | Flyout panels: Script (transcript), Style, Settings (+ music); `spans()` gives each segment's start/end |
+| `web/src/studio.css` | The studio layout and its animations (loaded after `App.css`) |
 | `web/src/Canvas.tsx` | Pannable/zoomable segment timeline, drag-to-reorder, tag ovals, timing meter |
-| `web/src/Inspector.tsx` | Right panel: Overview (look, music, voice) and SegmentPanel (script, timing, image, voice, captions, prop) |
+| `web/src/Inspector.tsx` | Segment inspector: title and type, narration, on-screen text, media drop, start/end and duration, captions, 3D prop |
 | `web/src/video/Video.tsx` | The renderer: types, timing maths, transitions, effects, captions, music ducking |
 | `web/src/video/theme.ts` | Styles (editorial, pixel, 2d, 3d), palettes, fonts |
 | `web/src/video/Stage3D.tsx` | 3D style: builds prop recipes live (Manifold WASM) on a three.js stage |

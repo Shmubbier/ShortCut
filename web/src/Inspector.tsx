@@ -1,26 +1,24 @@
+// Segment inspector: slides in from the right when a segment is selected and stays open until collapsed (spec §5).
+// It edits the same scene fields the Script panel shows, so narration edits sync both ways.
 import { useEffect, useState } from 'react'
+import { spans, stamp } from './Panels'
 import type { Recipe } from './video/bench3d/recipe'
 import { build, loadWasm } from './video/Stage3D'
-import { FONTS, PALETTES, STYLES, resolveTheme } from './video/theme'
-import { FPS, IMPORTANCE, MAX_LEN, MIN_LEN, OVERLAP, planDuration, sceneLen, timing, type Importance, type Plan, type SceneData, type Track } from './video/Video'
-
-export const VOICES = [
-  ['en-US-AndrewNeural', 'Andrew · US'], ['en-US-AvaNeural', 'Ava · US'], ['en-GB-RyanNeural', 'Ryan · UK'],
-  ['en-PH-JamesNeural', 'James · PH English'], ['en-PH-RosaNeural', 'Rosa · PH English'],
-  ['fil-PH-AngeloNeural', 'Angelo · Filipino'], ['fil-PH-BlessicaNeural', 'Blessica · Filipino'],
-] as const
+import { FPS, IMPORTANCE, MAX_LEN, MIN_LEN, OVERLAP, ROLES, isEmpty, sceneLen, timing, type Importance, type Plan, type Role, type SceneData } from './video/Video'
 
 type Props = {
   plan: Plan
   sel: number | null
-  setSel: (i: number | null) => void
-  change: (p: Plan) => void // live edit (typing), no undo entry
-  snapshot: () => void // call once before an edit to make it undoable
+  onClose: () => void
+  change: (p: Plan) => void // live edit (typing): undo groups a burst of edits
+  snapshot: () => void // call once before a discrete edit to make it undoable
   voice: (i: number | null) => void
   busy: string
   fixProp: (i: number, error: string) => void
   findImages: (query: string, assignTo: number | null) => void
   fixLength: (i: number, seconds: number) => void // ask the AI to rewrite a segment's voiceover to fit a fixed length
+  fill: (i: number) => void // ask the AI to write an empty segment
+  remove: (i: number) => void
 }
 
 // 3D prop build errors, checked with the same builder the renderer uses.
@@ -34,140 +32,30 @@ function usePropError(prop: Recipe | null | undefined) {
 }
 
 const secs = (frames: number) => `${(frames / FPS).toFixed(1)}s`
-const vis = (frames: number) => secs(frames - OVERLAP) // what the viewer sees of a segment, after the transition overlap
+const round1 = (n: number) => Math.round(n * 10) / 10
 
 export function Inspector(p: Props) {
   return (
-    <aside className="inspector">
-      {p.sel === null ? <Overview {...p} /> : <SegmentPanel {...p} i={p.sel} />}
+    <aside className="inspector" aria-label="Segment inspector">
+      <button className="collapse" onClick={p.onClose} aria-label="Collapse inspector" title="Collapse">›</button>
+      {p.sel === null || !p.plan.scenes[p.sel]
+        ? <p className="tip insp-empty">Select a segment on the storyboard to edit it here.</p>
+        : <SegmentPanel {...p} i={p.sel} />}
     </aside>
   )
 }
 
-function Overview({ plan, change, snapshot, setSel, voice, busy }: Props) {
-  const t = resolveTheme(plan.style, plan.theme)
-  const theme = (k: string, v: unknown) => { snapshot(); change({ ...plan, theme: { ...plan.theme, [k]: v } }) }
-  const voiced = plan.scenes.filter((s) => s.audio).length
-  return (
-    <>
-      <h2>Overview</h2>
-      <label>Title<input value={plan.title} onChange={(e) => change({ ...plan, title: e.target.value })} /></label>
-
-      <h3>Look</h3>
-      {plan.styleOptions?.length ? (
-        <div className="recs">
-          <span className="rec-label">Style · AI pick first</span>
-          <div className="chips-row">
-            {plan.styleOptions.map((st, k) => (
-              <button key={st} className={plan.style === st ? 'rec on' : 'rec'} onClick={() => { snapshot(); change({ ...plan, style: st }) }}>
-                {k === 0 ? '★ ' : ''}{STYLES[st].label}
-              </button>
-            ))}
-          </div>
-          {plan.styleWhy && <small className="tip">{plan.styleWhy}</small>}
-          {plan.style === '3d' && !plan.scenes.some((x) => x.prop) && <small className="tip">No 3D props yet: ask “add 3D props” in the prompt.</small>}
-        </div>
-      ) : null}
-      <label>Pace
-        <select value={plan.pace} onChange={(e) => { snapshot(); change({ ...plan, pace: e.target.value as Plan['pace'] }) }}>
-          <option value="punchy">Punchy</option><option value="documentary">Documentary</option>
-        </select>
-      </label>
-      <label>Color scheme
-        <div className="swatches">
-          {Object.entries(PALETTES).map(([k, pal]) => (
-            <button key={k} className={(plan.theme?.palette ?? STYLES[plan.style].palette) === k ? 'sw on' : 'sw'} title={pal.label} aria-label={pal.label}
-              onClick={() => theme('palette', k)}>
-              {pal.bg.slice(0, 4).map((c, j) => <i key={j} style={{ background: c }} />)}
-            </button>
-          ))}
-        </div>
-      </label>
-      <div className="row">
-        <label>Accent<input type="color" value={t.accent} onChange={(e) => theme('accent', e.target.value)} /></label>
-        <label>Grain<input type="range" min={0} max={0.4} step={0.02} value={t.grain} onChange={(e) => theme('grain', Number(e.target.value))} /></label>
-      </div>
-      <div className="row">
-        <label>Heading font
-          <select value={t.display} onChange={(e) => theme('display', e.target.value)}>{FONTS.map((f) => <option key={f}>{f}</option>)}</select>
-        </label>
-        <label>Body font
-          <select value={t.body} onChange={(e) => theme('body', e.target.value)}>{FONTS.map((f) => <option key={f}>{f}</option>)}</select>
-        </label>
-      </div>
-      {plan.theme && <button className="link" onClick={() => { snapshot(); change({ ...plan, theme: undefined }) }}>Reset to style defaults</button>}
-
-      <MusicPanel plan={plan} change={change} snapshot={snapshot} />
-
-      <h3>Voice & captions</h3>
-      <label>Narrator
-        <select value={plan.voice ?? VOICES[0][0]} onChange={(e) => { snapshot(); change({ ...plan, voice: e.target.value }) }}>
-          {VOICES.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-      </label>
-      <label className="check"><input type="checkbox" checked={plan.captions !== false} onChange={(e) => { snapshot(); change({ ...plan, captions: e.target.checked }) }} /> Show captions</label>
-      <button onClick={() => voice(null)} disabled={!!busy}>{busy === 'voice-all' ? 'Voicing…' : `Voice all segments (${voiced}/${plan.scenes.length} done)`}</button>
-
-      <h3>Segments · {secs(planDuration(plan))}</h3>
-      <ol className="seglist">
-        {plan.scenes.map((s, i) => (
-          <li key={s.id} onClick={() => setSel(i)}>
-            <em>{s.kind}</em><span>{s.purpose || s.headline}</span>
-            <span className="bar"><i className={`imp${s.importance ?? 2}`} style={{ width: `${(sceneLen(s, plan.pace) / Math.max(...plan.scenes.map((x) => sceneLen(x, plan.pace)))) * 100}%` }} /></span>
-            <small>{vis(sceneLen(s, plan.pace))}</small>
-          </li>
-        ))}
-      </ol>
-    </>
-  )
-}
-
-// Music: the AI's pick and its runners-up as one-click recommendations, the full library, volume, or none.
-function MusicPanel({ plan, change, snapshot }: Pick<Props, 'plan' | 'change' | 'snapshot'>) {
-  const [library, setLibrary] = useState<Track[]>([])
-  useEffect(() => { fetch('/api/music').then((r) => r.json()).then(setLibrary).catch(() => {}) }, [])
-  const byId = Object.fromEntries(library.map((m) => [m.id, m]))
-  const pick = (id: string) => { const m = byId[id]; if (m) { snapshot(); change({ ...plan, music: { ...m, volume: plan.music?.volume ?? 0.5 } }) } }
-  const recs = (plan.musicOptions ?? []).filter((id) => byId[id])
-  return (
-    <>
-      <h3>Music{plan.music ? ` · ${plan.music.title}` : ''}</h3>
-      {recs.length > 0 && (
-        <div className="recs">
-          <span className="rec-label">Recommended · AI pick first</span>
-          <div className="chips-row">
-            {recs.map((id, k) => (
-              <button key={id} className={plan.music?.id === id ? 'rec on' : 'rec'} onClick={() => pick(id)} title={byId[id].mood}>
-                {k === 0 ? '★ ' : ''}{byId[id].title}
-              </button>
-            ))}
-          </div>
-          {plan.musicWhy && <small className="tip">{plan.musicWhy}</small>}
-        </div>
-      )}
-      <div className="row">
-        <label>Track
-          <select value={plan.music?.id ?? ''} onChange={(e) => (e.target.value ? pick(e.target.value) : (snapshot(), change({ ...plan, music: null })))}>
-            <option value="">No music</option>
-            {library.map((m) => <option key={m.id} value={m.id}>{m.title} · {m.bpm} bpm</option>)}
-          </select>
-        </label>
-        {plan.music && <label>Volume<input type="range" min={0} max={1} step={0.05} value={plan.music.volume ?? 0.5}
-          onChange={(e) => change({ ...plan, music: { ...plan.music!, volume: Number(e.target.value) } })} /></label>}
-      </div>
-      {plan.music && <audio key={plan.music.url} src={plan.music.url} controls preload="none" className="music-preview" />}
-      <small className="tip">Original loops made by Blockcut (royalty-free). Music dips automatically under the voiceover.</small>
-    </>
-  )
-}
-
-function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp, findImages, fixLength }: Props & { i: number }) {
+function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findImages, fixLength, fill, remove }: Props & { i: number }) {
   const s = plan.scenes[i]
   const propErr = usePropError(plan.style === '3d' ? s.prop : null)
   const set = (patch: Partial<SceneData>) => change({ ...plan, scenes: plan.scenes.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
   const [capText, setCapText] = useState('')
   const [capErr, setCapErr] = useState('')
+  const [dropping, setDropping] = useState(false)
   useEffect(() => { setCapText((s.words ?? []).map((w) => w.text).join(' ')); setCapErr('') }, [s.words])
+  const times = spans(plan)
+  const t = timing(s, plan.pace)
+  const empty = isEmpty(s)
 
   function saveCaptions() {
     const toks = capText.trim().split(/\s+/).filter(Boolean)
@@ -177,73 +65,120 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp,
     set({ words: words.map((w, k) => ({ ...w, text: toks[k] })) })
     setCapErr('')
   }
+  // Start/end are views of segment lengths: moving this end resizes this segment; moving the start resizes the previous one.
+  const setEnd = (end: number) => set({ length: Math.min(MAX_LEN, Math.max(MIN_LEN, round1(end - times[i].start))) })
+  const setStart = (start: number) => {
+    if (i === 0) return
+    const len = Math.min(MAX_LEN, Math.max(MIN_LEN, round1(start - times[i - 1].start)))
+    change({ ...plan, scenes: plan.scenes.map((x, j) => (j === i - 1 ? { ...x, length: len } : x)) })
+  }
 
   return (
     <>
       <div className="seghead">
-        <button className="link" onClick={() => setSel(null)}>← Overview</button>
-        <h2>Segment {i + 1} <em>{s.kind}</em></h2>
-        <small>{vis(sceneLen(s, plan.pace))}</small>
-      </div>
-
-      <label>Purpose<textarea rows={2} value={s.purpose ?? ''} placeholder="What this beat does for the viewer" onChange={(e) => set({ purpose: e.target.value })} /></label>
-
-      <h3>On-screen script</h3>
-      <label>Headline<input value={s.headline} onChange={(e) => set({ headline: e.target.value })} /></label>
-      <label>Subline<input value={s.sub} onChange={(e) => set({ sub: e.target.value })} /></label>
-      {s.kind === 'stat' && <label>Number<input value={s.value} onChange={(e) => set({ value: e.target.value })} /></label>}
-
-      <h3>Timing · {vis(timing(s, plan.pace).frames)}</h3>
-      <div className="imp-switch" role="group" aria-label="Importance">
-        {([1, 2, 3] as Importance[]).map((lv) => (
-          <button key={lv} className={(s.importance ?? 2) === lv ? 'on' : ''} onClick={() => { snapshot(); set({ importance: lv }) }}>{IMPORTANCE[lv].label}</button>
-        ))}
-      </div>
-      <label className="len-row">Exact length
+        <span className="seg-num">Segment {i + 1} of {plan.scenes.length}</span>
+        <input className="seg-title" value={s.title ?? ''} placeholder={empty ? 'New segment' : s.headline || 'Untitled segment'}
+          onChange={(e) => set({ title: e.target.value })} aria-label="Segment title" />
         <div className="row">
-          <input type="range" min={MIN_LEN} max={MAX_LEN} step={0.1} value={s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS}
-            onChange={(e) => set({ length: Number(e.target.value) })} aria-label="Segment length in seconds" />
-          <input type="number" min={MIN_LEN} max={MAX_LEN} step={0.1} className="secs-in" value={Number((s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS).toFixed(1))}
-            onChange={(e) => e.target.value && set({ length: Math.min(MAX_LEN, Math.max(MIN_LEN, Number(e.target.value))) })} aria-label="Segment length, seconds" />
-          {s.length ? <button className="link" onClick={() => { snapshot(); set({ length: null }) }}>Auto</button> : null}
+          <select value={s.role ?? ''} onChange={(e) => { snapshot(); set({ role: (e.target.value || undefined) as Role | undefined }) }} aria-label="Segment type">
+            <option value="">Type…</option>
+            {(Object.keys(ROLES) as Role[]).map((r) => <option key={r} value={r}>{ROLES[r]}</option>)}
+          </select>
+          <button className="danger" onClick={() => remove(i)} aria-label={`Delete segment ${i + 1}`}>Delete</button>
         </div>
-      </label>
-      <small className="tip">{(() => {
-        const t = timing(s, plan.pace)
-        if (t.source === 'manual') return `Fixed at ${s.length?.toFixed(1)}s by you. Importance no longer changes it; press Auto to go back.`
-        return t.source === 'voice'
-          ? `${secs(t.voice)} of voiceover + ${secs(t.hold)} hold for a ${IMPORTANCE[s.importance ?? 2].label.toLowerCase()} beat. Drag the slider to set an exact length.`
-          : `From ${t.words} words of on-screen script, ×${IMPORTANCE[s.importance ?? 2].scale} for importance. Drag the slider to set an exact length.`
-      })()}</small>
-      {timing(s, plan.pace).cutsVoice && s.length && (
-        <div className="warn">
-          The voiceover runs {secs(timing(s, plan.pace).voice)}, longer than {s.length.toFixed(1)}s, so it'll be cut off.
-          <div className="row">
-            <button onClick={() => fixLength(i, s.length!)} disabled={!!busy}>Shorten the line to fit</button>
-            <button className="link" onClick={() => { snapshot(); set({ length: Math.ceil((timing(s, plan.pace).voice / FPS) * 10) / 10 + 0.3 }) }}>Use the voice's length</button>
-          </div>
+      </div>
+
+      {empty && (
+        <div className="fill-box">
+          This segment is empty. Write its narration and on-screen text below, drop an image on it, or
+          <button onClick={() => fill(i)} disabled={!!busy}>{busy === 'ai' ? 'Writing…' : '✦ Fill with AI'}</button>
         </div>
       )}
 
-      <h3>Image</h3>
-      {s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">No image on this segment.</p>}
-      <button onClick={() => findImages(`${plan.title} ${s.headline}`, i)} disabled={!!busy}>{busy === `find-${i}` ? 'Searching the web…' : 'Find images for this segment'}</button>
+      <label>Scene description<textarea rows={2} value={s.purpose ?? ''} placeholder="What happens in this scene and why" onChange={(e) => set({ purpose: e.target.value })} /></label>
 
-      <h3>Voiceover</h3>
+      <h3>Narration</h3>
       <textarea rows={4} value={s.voiceover ?? ''} placeholder="What the narrator says over this segment"
-        onChange={(e) => set({ voiceover: e.target.value, audio: null, words: [] })} aria-label="Voiceover script" />
+        onChange={(e) => set({ voiceover: e.target.value, audio: null, words: [] })} aria-label="Narration" />
       <div className="row">
         <button onClick={() => voice(i)} disabled={!!busy || !s.voiceover?.trim()}>{busy === `voice-${i}` ? 'Voicing…' : s.audio ? 'Re-generate voice' : 'Generate voice'}</button>
         {s.audio && <audio src={s.audio.url} controls preload="none" />}
       </div>
 
+      <h3>On-screen text</h3>
+      <label>Headline<input value={s.headline} onChange={(e) => set({ headline: e.target.value })} /></label>
+      <label>Subline<input value={s.sub} onChange={(e) => set({ sub: e.target.value })} /></label>
+      {s.kind === 'stat' && <label>Number<input value={s.value} onChange={(e) => set({ value: e.target.value })} /></label>}
+
+      <h3>Media</h3>
+      <div className={`media-drop ${dropping ? 'over' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDropping(true) }} onDragLeave={() => setDropping(false)}
+        onDrop={(e) => {
+          e.preventDefault(); setDropping(false)
+          try { const it = JSON.parse(e.dataTransfer.getData('text/plain')); if (it.type === 'asset') { snapshot(); set({ asset: it.url }) } } catch { /* not a library tile */ }
+        }}>
+        {s.media?.type === 'video' ? <p className="tip">Video: {s.media.name ?? s.media.url}</p>
+          : s.asset ? <img className="seg-img" src={s.asset} alt="" /> : <p className="tip">Drop an image from the Asset Library here.</p>}
+      </div>
+      <div className="row">
+        <button onClick={() => findImages(`${plan.title} ${s.headline || s.title || ''}`.trim(), i)} disabled={!!busy}>{busy === `find-${i}` ? 'Searching the web…' : 'Find images for this segment'}</button>
+        {s.asset && <button className="link" onClick={() => { snapshot(); set({ asset: '' }) }}>Remove</button>}
+      </div>
+
+      <h3>Timing · {secs(t.frames - OVERLAP)}</h3>
+      <div className="row times">
+        <label>Start<input type="number" step={0.1} min={0} value={round1(times[i].start)} disabled={i === 0}
+          onChange={(e) => e.target.value && setStart(Number(e.target.value))} aria-label="Start time, seconds" /></label>
+        <label>End<input type="number" step={0.1} min={0} value={round1(times[i].end)}
+          onChange={(e) => e.target.value && setEnd(Number(e.target.value))} aria-label="End time, seconds" /></label>
+        <small className="tip">{stamp(times[i].start)}–{stamp(times[i].end)}</small>
+      </div>
+      <div className="imp-switch" role="group" aria-label="Duration preset">
+        {([1, 2, 3] as Importance[]).map((lv) => (
+          <button key={lv} className={!s.length && (s.importance ?? 2) === lv ? 'on' : ''} onClick={() => { snapshot(); set({ importance: lv, length: null }) }}>{IMPORTANCE[lv].label}</button>
+        ))}
+      </div>
+      <label className="len-row">Duration
+        <div className="row">
+          <input type="range" min={MIN_LEN} max={MAX_LEN} step={0.1} value={s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS}
+            onChange={(e) => set({ length: Number(e.target.value) })} aria-label="Segment duration in seconds" />
+          <input type="number" min={MIN_LEN} max={MAX_LEN} step={0.1} className="secs-in" value={round1(s.length ?? (sceneLen(s, plan.pace) - OVERLAP) / FPS)}
+            onChange={(e) => e.target.value && set({ length: Math.min(MAX_LEN, Math.max(MIN_LEN, Number(e.target.value))) })} aria-label="Segment duration, seconds" />
+          {s.length ? <button className="link" onClick={() => { snapshot(); set({ length: null }) }}>Auto</button> : null}
+        </div>
+      </label>
+      <small className="tip">{t.source === 'manual'
+        ? `Fixed at ${s.length?.toFixed(1)}s. Later segments shift to match; press a preset or Auto to go back.`
+        : t.source === 'voice'
+          ? `${secs(t.voice)} of narration + ${secs(t.hold)} hold (${IMPORTANCE[s.importance ?? 2].label.toLowerCase()}).`
+          : `From ${t.words} words of on-screen text (${IMPORTANCE[s.importance ?? 2].label.toLowerCase()}). Generate the voice to time it to the narration.`}</small>
+      {t.cutsVoice && s.length ? (
+        <div className="warn">
+          The narration runs {secs(t.voice)}, longer than {s.length.toFixed(1)}s, so it'll be cut off.
+          <div className="row">
+            <button onClick={() => fixLength(i, s.length!)} disabled={!!busy}>Shorten the line to fit</button>
+            <button className="link" onClick={() => { snapshot(); set({ length: Math.ceil((t.voice / FPS) * 10) / 10 + 0.3 }) }}>Use the narration's length</button>
+          </div>
+        </div>
+      ) : null}
+
       <h3>Captions</h3>
       {s.words?.length ? (
         <>
           <textarea rows={3} value={capText} onChange={(e) => setCapText(e.target.value)} onBlur={saveCaptions} aria-label="Caption words" />
-          <small className={capErr ? 'err' : 'tip'}>{capErr || (s.captionSource === 'whisper' ? 'Fix any misheard words; timings come from Whisper.' : 'Timings from the voice engine (Whisper model not downloaded yet). Fix words freely.')}</small>
+          <small className={capErr ? 'err' : 'tip'}>{capErr || (s.captionSource === 'whisper' ? 'Fix any misheard words; timings come from Whisper.' : 'Timings from the voice engine. Fix words freely.')}</small>
         </>
       ) : <p className="tip">Generate the voice to get word-timed captions.</p>}
+
+      {(s.effects.length > 0 || s.transition !== 'cut') && (
+        <>
+          <h3>Tags</h3>
+          <div className="chips-row">
+            <span className="chip">In: {s.transition}</span>
+            {s.effects.map((e) => <span key={e} className="chip">{e}</span>)}
+          </div>
+        </>
+      )}
 
       {plan.style === '3d' && (
         <>
@@ -254,7 +189,7 @@ function SegmentPanel({ plan, i, change, snapshot, setSel, voice, busy, fixProp,
               {propErr && <><p className="err">Couldn't build: {propErr}</p><button onClick={() => fixProp(i, propErr)} disabled={!!busy}>Fix with AI</button></>}
               <button className="link" onClick={() => { snapshot(); set({ prop: null }) }}>Remove prop</button>
             </>
-          ) : <p className="tip">No prop. Ask in the prompt, e.g. "add a 3D jeepney here".</p>}
+          ) : <p className="tip">No prop. Ask the assistant, e.g. "add a 3D jeepney here".</p>}
         </>
       )}
     </>
