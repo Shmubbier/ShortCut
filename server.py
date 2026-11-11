@@ -205,6 +205,9 @@ def ask_cli(prompt: str, schema, research: bool):
     except json.JSONDecodeError:
         raise RuntimeError(f"Claude Code failed: {(r.stderr or r.stdout)[:300]}")
     if d.get("is_error"):
+        if "limit" in str(d.get("result", "")).lower():  # plan usage limit: stop trying for a while so demo mode answers fast
+            global _cli_ok
+            _cli_ok = (time.time() + 20 * 60, False)  # backend() re-checks only after this stamp is 60 s old
         raise RuntimeError(f"Claude Code: {d.get('result')}")
     out = d.get("structured_output")
     return schema.model_validate(out) if out is not None else schema.model_validate_json(d.get("result", ""))
@@ -298,13 +301,26 @@ def create(body: dict) -> dict:
     if not topic:
         raise ValueError("Describe what the video is about")
     meta = {"style": body.get("style", "auto"), "pace": body.get("pace", "punchy"), "aspect": body.get("aspect", "9:16")}
-    mode = backend()
-    if not mode:
+    def offline(why: str = "") -> dict:
         sample = find_sample(topic)
         if sample:  # the sample brings its own style and music; the user's chosen format still applies
-            return {**meta, **sample, "aspect": meta["aspect"], "research": ""}
-        style = "editorial" if meta["style"] == "auto" else meta["style"]
-        return {**demo_plan(topic, body.get("assets", []), style), **meta, "style": style, **demo_direction(style), "research": ""}
+            out = {**meta, **sample, "aspect": meta["aspect"], "research": ""}
+        else:
+            style = "editorial" if meta["style"] == "auto" else meta["style"]
+            out = {**demo_plan(topic, body.get("assets", []), style), **meta, "style": style, **demo_direction(style), "research": ""}
+        return {**out, "note": f"{why} {out['note']}".strip()}
+
+    mode = backend()
+    if not mode:
+        return offline()
+    try:
+        return generate(topic, meta, mode, body)
+    except Exception as e:  # e.g. Claude Code's usage limit mid-demo: show a sample instead of a dead end
+        print("generation failed, falling back offline:", repr(e)[:300])
+        return offline(f"AI unavailable ({str(e)[:140]}).")
+
+
+def generate(topic: str, meta: dict, mode: str, body: dict) -> dict:
     notes = research(topic) if mode == "api" else ""  # the CLI path researches with Claude Code's own web search
     fmt = "vertical short-form reel" if meta["aspect"] in ("9:16", "4:5") else "horizontal video"
     look = "a visual style you choose (see direction below)" if meta["style"] == "auto" else f"the {meta['style']} visual style"

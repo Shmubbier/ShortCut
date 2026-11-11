@@ -17,16 +17,19 @@ How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things sta
 | Asset bucket: upload, grab from URL, **ScrapeGraphAI topic image search** (auto before Generate, per segment) | `server.py` `find_images` | 6 ube / 3 jeepney images |
 | Voiceover (Edge TTS, PH + Filipino voices) + **Whisper word captions** | `server.py` `voice` | English and Filipino |
 | **Importance** (Quick/Normal/Key) + timing meter on cards | `Video.tsx` `timing`, `Canvas.tsx` | Yes |
-| **Exact segment length** slider (1-20 s), voice-cut warning with fixes | `Inspector.tsx` `SegmentPanel` | Slider and meter checked; warning not yet clicked through |
+| **Exact segment length** slider (1-20 s), voice-cut warning with fixes | `Inspector.tsx` `SegmentPanel` | Yes (slider, meter, warning and fix) |
 | **Music:** 8 original synthesised loops, AI pick + recommendations, volume, ducking under voice | `music.py`, `Video.tsx` `Music` | Panel and chips checked; **nobody has listened to the tracks yet** |
 | Offline demo samples (ube editorial, jeepney 2D, tower defense 3D) | `samples/` | Yes (only used when no AI backend) |
 
-## In flight right now
+## Recently landed
 
-- **Uncommitted when this file was written:** card/inspector lengths now show on-screen seconds (minus the 0.2 s transition
-  overlap, so a 2.0 s fixed length reads 2.0 s, not 2.2 s), and the `web-ui` launch entry. Committed together with this file.
-- **Browser check left over:** clicking a music recommendation chip, and voicing a segment with a too-short fixed length to see
-  the warning and its "Use the voice's length" fix. The logic typechecks; it hasn't been clicked yet.
+- Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
+- Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover
+  shows the cut-off warning, and "Use the voice's length" sets 10.0 s and clears it.
+- **AI failure fallback:** if generation fails (for example Claude Code's 5-hour plan limit, which we hit this morning),
+  Create loads the matching sample or demo plan with a note instead of erroring. A usage-limit error also makes the server
+  skip Claude Code for ~20 min, so the fallback is instant. The *first* failing request is still slow (~2 min), because
+  Claude Code retries before giving up.
 
 ## Next up, in priority order for tonight's demo
 
