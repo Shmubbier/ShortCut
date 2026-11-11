@@ -619,16 +619,45 @@ def scrape(body: dict) -> list:
 JUNK = re.compile(r"logo|icon|avatar|sprite|badge|placeholder|gravatar|pixel|emoji|spinner|button|banner|advert|/ads?/|1x1")
 
 
+def topic_query(text: str) -> str:
+    """A video prompt -> a short search topic. "Yo give me a topic on the epstein files, lighthearted style, dont forget
+    images" -> "the epstein files". Style and format instructions don't belong in an image search."""
+    t = re.split(r"[,.;:!?\n]|\s-\s", text.lower(), maxsplit=1)[0]
+    t = re.sub(r"^\s*(yo|hey|hi|ok|okay|please|pls)\b[\s,]*", "", t)
+    t = re.sub(r"^(can you |could you )?(give me|make|create|do|write|generate|explain|show)( me)?( a| an| the)?"
+               r"( short| quick| fun| \d+\s*s(ec(ond)?s?)?)*( video| reel| topic| explainer| short| clip| story)?( on| about| for| of)?\s+", "", t)
+    t = re.sub(r"^(a |an )?(video|reel|topic|explainer)( on| about| of)\s+", "", t)
+    words = t.split()[:10]
+    return " ".join(words) if words else text.strip()[:60]
+
+
 def find_images(query: str, limit: int = 8) -> list:
     """Topic -> images: ScrapeGraphAI's web search finds relevant pages, then each page's cover image and captioned
-    images are ranked by how well their caption/filename matches the query. Saves the best ones to the bucket,
-    remembering the page each came from (for credits)."""
+    images are ranked by how well their caption/filename matches the query. If that search fails or comes up short
+    (one flaky backend, e.g. a Wikipedia timeout, used to sink the whole step), DuckDuckGo image search tops it up.
+    Saves the best ones to the bucket, remembering the page each came from (for credits)."""
     from concurrent.futures import ThreadPoolExecutor
 
     from scrapegraphai.utils.research_web import search_on_web
 
-    pages = search_on_web(query, max_results=5, timeout=20)
+    query = topic_query(query)
+    try:
+        pages = search_on_web(query, max_results=5, timeout=20)
+    except Exception as e:
+        print("ScrapeGraphAI search failed, falling back to image search:", repr(e)[:160])
+        pages = []
     words = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2}
+
+    def image_search() -> list:
+        try:
+            from ddgs import DDGS
+
+            hits = DDGS().images(query, max_results=limit * 2)
+        except Exception as e:
+            print("image search failed:", repr(e)[:160])
+            return []
+        return [(5, h["image"], h.get("title") or query, h.get("url", ""), h.get("source") or urlparse(h.get("url", "")).netloc.removeprefix("www."))
+                for h in hits if h.get("image") and not urlparse(h["image"]).path.lower().endswith((".svg", ".gif"))]
 
     def candidates(page: str) -> list:
         try:
@@ -654,6 +683,8 @@ def find_images(query: str, limit: int = 8) -> list:
 
     with ThreadPoolExecutor(8) as ex:  # the venue network is slow; fetch pages and images in parallel
         ranked = sorted((c for cs in ex.map(candidates, pages) for c in cs), key=lambda c: -c[0])
+        if len({c[1] for c in ranked}) < limit:  # ScrapeGraphAI pages came up short (or failed): top up from image search
+            ranked += image_search()
         seen, picks = set(), []
         for c in ranked:
             if c[1] not in seen:

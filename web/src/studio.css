@@ -126,6 +126,37 @@
 .toast { position: absolute; left: 50%; bottom: 56px; translate: -50% 0; z-index: 8; background: var(--ink); color: var(--paper); padding: 8px 14px; border-radius: 10px; display: flex; gap: 12px; align-items: center; font-size: 13px; animation: pop .2s ease-out; }
 .toast .link { color: #ffb4a6; }
 
+/* Cooking state: the hero card stays put while generation gathers everything */
+.hero.cooking { animation: breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { box-shadow: 8px 8px 0 var(--ink); } 50% { box-shadow: 11px 11px 0 var(--ink); } }
+.cook { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+.cook h1 { font-size: 28px; }
+.cook-prompt { margin: 0; font-family: Georgia, serif; font-style: italic; color: var(--muted); max-width: 46ch; }
+.pot { width: 120px; height: 100px; overflow: visible; }
+.pot path { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.pot .pot-body { fill: var(--accent); }
+.pot .pot-lid { animation: lid .9s ease-in-out infinite; transform-origin: 60px 46px; }
+.pot .steam { stroke: var(--muted); stroke-width: 3; stroke-dasharray: 28; animation: steam 1.8s ease-in-out infinite; opacity: 0; }
+.pot .s2 { animation-delay: .5s; } .pot .s3 { animation-delay: 1s; }
+@keyframes steam { 0% { stroke-dashoffset: 28; opacity: 0; transform: translateY(6px); } 40% { opacity: .9; } 100% { stroke-dashoffset: -28; opacity: 0; transform: translateY(-8px); } }
+@keyframes lid { 0%, 100% { transform: none; } 30% { transform: translateY(-3px) rotate(-3deg); } 60% { transform: translateY(-1px) rotate(2deg); } }
+.cook-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; font-weight: 700; color: var(--muted); }
+.cook-steps li { display: flex; align-items: center; gap: 8px; }
+.cook-steps .mark { width: 18px; height: 18px; border-radius: 50%; border: 2px solid currentColor; display: grid; place-items: center; font-size: 11px; flex: none; }
+.cook-steps li.done { color: var(--ink); }
+.cook-steps li.done .mark { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.cook-steps li.now { color: var(--accent); }
+.cook-steps li.now .mark { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+.cook-steps em { font-style: normal; font-variant-numeric: tabular-nums; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Assistant open: it docks as a column on the left of the workspace, which slides right instead of hiding behind it */
+.studio main { transition: padding-left .3s cubic-bezier(.2, .9, .3, 1); }
+.studio main.assist-open { padding-left: 372px; }
+.assistant.open { top: 70px; bottom: 52px; }
+.assistant.open .assist-panel { flex: 1; max-height: none; }
+.assistant.open .assist-panel .log { max-height: none; flex: 1; }
+
 /* Footage: clip tiles, transcript review, hero link */
 .clips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .clip { border: 1.5px solid var(--ink); border-radius: 8px; background: #fff8ef; padding: 4px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; cursor: grab; }

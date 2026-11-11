@@ -60,6 +60,9 @@ export default function App() {
   const [busy, setBusy] = useState('') // '' | 'ai' | 'gen' | 'voice-all' | 'voice-<i>' | 'find' | 'find-<i>'
   const [gen, setGen] = useState<Gen | null>(null)
   const [leaving, setLeaving] = useState(false) // hero prompt shrinking into the assistant icon
+  const [cookStart, setCookStart] = useState(0)
+  const [now, setNow] = useState(Date.now())
+  const [heroError, setHeroError] = useState('')
   const [reveal, setReveal] = useState(Infinity) // cards shown so far during the reveal
   const [previewIn, setPreviewIn] = useState(!!saved?.plan)
   const [toast, setToast] = useState<{ text: string; undo: boolean } | null>(null)
@@ -77,6 +80,7 @@ export default function App() {
   planRef.current = plan
 
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}) }, [])
+  useEffect(() => { if (!gen) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [gen])
   useEffect(() => { // autosave (skipped mid-reveal so a refresh can't save a half-shown storyboard)
     if (gen) return
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ plan, log: log.slice(-60), clips })) } catch { /* storage full or blocked */ }
@@ -205,14 +209,16 @@ export default function App() {
   const errText = (e: unknown) => `⚠ ${e instanceof Error ? e.message : e}`
 
   // First prompt: hero shrinks into the assistant, then images → script → storyboard reveal → preview, each a real step.
+  // The hero card stays on screen and "cooks" (real stages + elapsed time) until the whole plan is ready.
+  // Only then does it shrink into the assistant and the workspace animate in: the card-by-card population
+  // is a presentation of finished data, so nobody stares at a half-empty workspace.
   async function generate(text: string) {
-    const stages = [...(autoImages ? ['Finding images'] : []), 'Researching & writing the script', 'Building the storyboard', 'Preparing the preview']
-    setLeaving(true)
+    const stages = [...(autoImages ? ['Finding images'] : []), 'Researching & writing the script']
+    setHeroError('')
     setBusy('gen')
     setGen({ stages, at: 0 })
+    setCookStart(Date.now())
     say('you', text, 'New video')
-    await wait(450) // let the hero finish its ease into the corner
-    setLeaving(false)
     let at = 0
     try {
       let bucket = assets
@@ -228,20 +234,24 @@ export default function App() {
         setGen({ stages, at: ++at })
       }
       const p: Plan & { note?: string } = await api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets: bucket })
-      setGen({ stages, at: ++at })
+      setGen({ stages, at: ++at }) // everything gathered: all stages ticked
+      await wait(500)
+      setLeaving(true) // hero eases into the assistant corner…
+      await wait(450)
       setReveal(0)
       setPreviewIn(false)
       setHistory([])
-      setPlanRaw(p)
-      for (let k = 1; k <= p.scenes.length; k++) { await wait(260); setReveal(k) } // cards populate one by one
-      setGen({ stages, at: ++at })
+      setPlanRaw(p) // …then the workspace appears and populates
+      setLeaving(false)
+      await wait(300)
+      for (let k = 1; k <= p.scenes.length; k++) { await wait(220); setReveal(k) }
       await wait(150)
-      setPreviewIn(true) // preview slides in once the storyboard is complete
+      setPreviewIn(true)
       await wait(500)
       say('ai', p.note ?? `Made ${p.scenes.length} segments.`, 'New video')
     } catch (e) {
       say('ai', errText(e), 'New video')
-      setAssistOpen(true)
+      setHeroError(errText(e))
     } finally {
       setReveal(Infinity)
       setGen(null)
@@ -347,9 +357,10 @@ export default function App() {
     title: sel !== null ? `Apply to segment ${sel + 1}` : 'Drag onto a segment',
   })
 
-  const started = !!plan || !!gen || !!footage || busy === 'upload' || busy === 'transcribe'
+  const started = !!plan || !!footage || busy === 'upload' || busy === 'transcribe'
+  const cooking = !!gen && !plan
   const selEmpty = plan && sel !== null && plan.scenes[sel] ? isEmpty(plan.scenes[sel]) : false
-  const busyLabel = gen ? gen.stages[Math.min(gen.at, gen.stages.length - 1)]
+  const busyLabel = gen ? '' // generation shows its progress on the hero card, not the bottom bar
     : busy === 'ai' ? 'Applying your edit…' : busy === 'voice-all' ? 'Voicing all segments…' : busy.startsWith('voice-') ? 'Voicing the segment…'
       : busy.startsWith('find') ? 'Searching the web for images…' : busy === 'upload' ? 'Uploading footage…' : busy === 'transcribe' ? 'Transcribing the footage (Whisper)…' : ''
   const curAspect = plan?.aspect ?? aspect
@@ -436,7 +447,7 @@ export default function App() {
         </Flyout>
       )}
 
-      <main>
+      <main className={assistOpen && started ? 'assist-open' : ''}>
         {started && (
           <header>
             <b>{plan?.title ?? 'Generating…'}</b>
@@ -446,7 +457,27 @@ export default function App() {
         )}
 
         {(!started || leaving) && (
-          <div className={`hero ${leaving ? 'leaving' : ''}`}>
+          <div className={`hero ${leaving ? 'leaving' : ''} ${cooking ? 'cooking' : ''}`}>
+            {cooking || leaving ? (
+              <div className="cook" role="status" aria-live="polite">
+                <svg className="pot" viewBox="0 0 120 100" aria-hidden="true">
+                  <path className="steam s1" d="M42 38c-6-8 6-12 0-20" /><path className="steam s2" d="M60 34c-6-8 6-12 0-20" /><path className="steam s3" d="M78 38c-6-8 6-12 0-20" />
+                  <path className="pot-body" d="M22 48h76v8c0 18-14 30-38 30S22 74 22 56z" /><path className="pot-lid" d="M18 46h84" /><path className="pot-handle" d="M10 52h12M98 52h12" />
+                </svg>
+                <h1>Cooking up your video…</h1>
+                <p className="cook-prompt">“{log.filter((m) => m.who === 'you').at(-1)?.text}”</p>
+                <ol className="cook-steps">
+                  {gen?.stages.map((st, k) => (
+                    <li key={st} className={k < gen.at ? 'done' : k === gen.at ? 'now' : ''}>
+                      <span className="mark">{k < gen.at ? '✓' : ''}</span>{st}{k === gen.at ? <em> · {Math.max(0, Math.round((now - cookStart) / 1000))}s</em> : null}
+                    </li>
+                  ))}
+                  <li className={gen && gen.at >= gen.stages.length ? 'now' : ''}><span className="mark" />Setting up your workspace</li>
+                </ol>
+                <small className="tip">Researching the web and writing usually takes 40-60 s (3D: about 2 min).</small>
+              </div>
+            ) : (
+            <>
             <h1>What video should we make?</h1>
             <p className="tip">Any topic: food, history, games, explainers. Blockcut researches it, writes the script, builds the storyboard and edits it.</p>
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={3} autoFocus
@@ -466,6 +497,9 @@ export default function App() {
             <label className="hero-footage">or start from your own video clip
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
+            {heroError && <p className="err">{heroError}</p>}
+            </>
+            )}
           </div>
         )}
 
