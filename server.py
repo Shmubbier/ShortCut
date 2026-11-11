@@ -305,7 +305,11 @@ def captions(path: Path, voice: str, tts_words: list) -> tuple[list, str]:
         segs, _ = whisper().transcribe(str(path), word_timestamps=True, language="tl" if voice.startswith("fil-") else "en")
         words = [{"text": w.word.strip(), "start": round(w.start, 2), "end": round(w.end, 2)}
                  for seg in segs for w in (seg.words or []) if w.word.strip()]
-        if words:
+        # We know the exact script, so keep Whisper's timings but the script's spelling when the words line up.
+        if words and len(words) == len(tts_words):
+            return [{**w, "text": t["text"]} for w, t in zip(words, tts_words)], "whisper"
+        # ponytail: 'base' mishears Tagalog; trust the TTS timings there. A bigger WHISPER_MODEL would fix this.
+        if words and not voice.startswith("fil-"):
             return words, "whisper"
     except Exception as e:
         print("whisper unavailable, using TTS timings:", repr(e)[:200])
