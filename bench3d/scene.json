@@ -1,0 +1,20 @@
+{
+  "_comment": "One scene spec read by all three engines (Remotion, Blender, raea). Units: meters, degrees.",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "frames": 120,
+  "background": "#f3ece0",
+  "ink": "#1d1d1b",
+  "accent": "#e8432e",
+  "title": "UBE SEASON",
+  "font": "fonts/ArchivoBlack-Regular.ttf",
+  "shadowOpacity": 0.22,
+  "kicker": "No. 07 / the purple yam issue",
+  "models": [
+    { "file": "taro-plant-8c0493.glb", "position": [-0.3, 0, -0.1], "rotationY": 0, "scale": 1.3 },
+    { "file": "basket-of-produce-7420cf.glb", "position": [0.5, 0, 0.45], "rotationY": 30, "scale": 1.3 }
+  ],
+  "camera": { "target": [-0.2, 1.0, 0.15], "radius": 7.5, "height": 2.3, "fovY": 32, "orbitFromDeg": -35, "orbitToDeg": 35, "easing": "inOutCubic" },
+  "keyLight": { "position": [3, 6, 4] }
+}

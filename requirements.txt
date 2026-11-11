@@ -1,0 +1,5 @@
+anthropic
+pydantic
+scrapegraphai
+edge-tts
+faster-whisper

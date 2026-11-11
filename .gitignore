@@ -1,0 +1,20 @@
+# dependencies / environments
+node_modules/
+.venv/
+__pycache__/
+
+# large local tools and models (re-downloadable)
+bench3d/tools/
+models/
+
+# generated output
+web/out/
+web/dist/
+bench3d/out/
+web/public/media/
+
+# user asset bucket (runtime data)
+web/public/assets/
+
+# local Claude worktrees
+.claude/worktrees/

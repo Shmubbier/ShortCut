@@ -1,0 +1,52 @@
+{
+  "_comment": "A generated-model recipe, the kind of JSON Claude would write from a prompt. Built by two interpreters: web/src/video/bench3d/manifoldModel.ts (Manifold, in the browser) and bench3d/modelgen/blender_model.py (Blender, headless -> GLB). Units: meters; y is up.",
+  "model": {
+    "name": "ube",
+    "length": 1.25,
+    "radius": 0.22,
+    "segments": 28,
+    "taper": 0.55,
+    "bend": 0.25,
+    "lumps": {
+      "amount": 0.14,
+      "seed": 7
+    },
+    "skin": "#5a2d6b",
+    "flesh": "#b48fd8"
+  },
+  "instances": [
+    {
+      "name": "ube_whole",
+      "cut": false,
+      "position": [
+        -0.4,
+        0.25,
+        -0.2
+      ],
+      "rotationY": 15
+    },
+    {
+      "name": "ube_half",
+      "cut": true,
+      "position": [
+        0.45,
+        0.25,
+        0.4
+      ],
+      "rotationY": -25
+    }
+  ],
+  "camera": {
+    "target": [
+      0.0,
+      0.62,
+      0.1
+    ],
+    "radius": 6.8,
+    "height": 2.4,
+    "fovY": 32,
+    "orbitFromDeg": -35,
+    "orbitToDeg": 35,
+    "easing": "inOutCubic"
+  }
+}
