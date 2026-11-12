@@ -32,6 +32,7 @@ from urllib.parse import unquote, urljoin, urlparse
 from pydantic import BaseModel
 
 import music
+import asset_search
 
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
@@ -737,10 +738,64 @@ def find(body: dict) -> list:
     q = body.get("query", "").strip()
     if not q:
         raise ValueError("Type a topic to search images for")
-    out = find_images(q, int(body.get("limit", 8)))
+    limit = max(1, min(int(body.get("limit", 8)), 12))
+    candidates = search_assets({"query": q, "kinds": ["image"], "limit": limit})["candidates"]
+    out = []
+    for candidate in candidates:
+        try:
+            item = import_asset({"candidate": candidate})
+            out.append({k:item[k] for k in ("url", "name", "source") if k in item} | {"license":item.get("license", ""), "author":item.get("author", "")})
+            if len(out) >= limit: break
+        except Exception as e:
+            print("asset import skipped:", candidate.get("source_page", ""), repr(e)[:120])
+    if not out:
+        out = find_images(q, limit)  # retain ScrapeGraphAI + DDG as a last-resort source
     if not out:
         raise ValueError("No good images found for that topic; try different words")
     return out
+
+
+def search_assets(body: dict) -> dict:
+    query = body.get("query", "").strip()
+    if not query: raise ValueError("Type a topic to search for assets")
+    kinds = body.get("kinds", ["image", "video", "model"])
+    return {"candidates": asset_search.search(topic_query(query), kinds, int(body.get("limit", 8)))}
+
+
+def import_asset(body: dict) -> dict:
+    c = body.get("candidate") or {}
+    raw, mime, ext = asset_search.fetch(c)
+    kind = c["kind"]
+    name = re.sub(r"[^a-z0-9]+", "-", c.get("title", "asset").lower()).strip("-")[:36] or "asset"
+    if kind == "image":
+        result = save_asset(raw, mime, c.get("title", "image"), c.get("source_page", ""))
+        meta = {"license": c.get("license", ""), "author": c.get("author", "")}
+        (ASSETS / (Path(result["url"]).name + ".json")).write_text(json.dumps({"name":result["name"],"source":result["source"],**meta}),encoding="utf-8")
+        return {**result, **meta, "kind": kind}
+    folder = FOOTAGE if kind == "video" else ROOT / "web" / "public" / "models3d"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{name}-{uuid.uuid4().hex[:8]}.{ext}"
+    path.write_bytes(raw)
+    url = f"/{'footage' if kind == 'video' else 'models3d'}/{path.name}"
+    meta = {"name": c.get("title", path.name)[:60], "source": c.get("source_page", ""), "license": c.get("license", ""), "author": c.get("author", "")}
+    path.with_name(path.name + ".json").write_text(json.dumps(meta), encoding="utf-8")
+    duration = c.get("duration")
+    if kind == "video":
+        try:
+            import av
+            with av.open(str(path)) as container: duration = round(float(container.duration or 0) / 1_000_000, 2)
+            if not duration or duration > 60:
+                path.unlink(missing_ok=True)
+                raise ValueError("Only video clips up to 60 seconds can be imported")
+        except ImportError:
+            path.unlink(missing_ok=True)
+            raise ValueError("Video duration validation needs PyAV")
+        except ValueError:
+            raise
+        except Exception as e:
+            path.unlink(missing_ok=True)
+            raise ValueError("Could not validate the video clip; try another result") from e
+    return {"url": url, **meta, "duration": duration, "kind": kind}
 
 
 def delete_asset(body: dict) -> dict:
@@ -940,7 +995,8 @@ def render(body: dict) -> dict:
 
 
 ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/assets/upload": upload,
-          "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/delete": delete_asset,
+          "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/search": search_assets,
+          "/api/assets/import": import_asset, "/api/assets/delete": delete_asset,
           "/api/footage/upload": upload_footage, "/api/footage/transcribe": transcribe_footage,
           "/api/footage/storyboard": storyboard_footage, "/api/render": render}
 
@@ -951,11 +1007,18 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(list_assets(), 200)
         if self.path == "/api/music":
             return self.reply(MUSIC, 200)
+        if self.path == "/api/models3d":
+            folder = ROOT / "web" / "public" / "models3d"
+            rows = []
+            for p in folder.glob("*.glb") if folder.exists() else []:
+                side = p.with_name(p.name + ".json")
+                rows.append({"url":f"/models3d/{p.name}", **(json.loads(side.read_text(encoding="utf-8")) if side.exists() else {"name":p.name})})
+            return self.reply(rows, 200)
         if self.path.startswith("/api/render/"):
             rid = self.path.rsplit("/", 1)[-1]
             return self.reply(RENDER_JOBS.get(rid, {"status": "not_found", "progress": 0}), 200 if rid in RENDER_JOBS else 404)
         # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
-        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/renders/", RENDERS)):
+        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/models3d/", ROOT / "web" / "public" / "models3d"), ("/renders/", RENDERS)):
             if self.path.startswith(prefix):
                 p = folder / Path(unquote(urlparse(self.path).path)).name  # .name keeps us inside the folder
                 if not p.is_file():
