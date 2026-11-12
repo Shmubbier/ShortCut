@@ -37,7 +37,26 @@ const readDataUrl = (f: File) => new Promise<string>((ok, fail) => {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // The project survives refreshes: plan + assistant history live in this browser (spec acceptance: assets stay accessible).
-const SAVE_KEY = 'blockcut.project.v1'
+// ShortCut mark: a play button with a diagonal cut through it.
+export const Logo = ({ size = 34 }: { size?: number }) => (
+  <svg className="logo" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+    <rect width="40" height="40" rx="11" fill="var(--accent)" />
+    <path d="M15 11.5v17l14-8.5z" fill="#fff" />
+    <path d="M9 31 31 9" stroke="var(--accent)" strokeWidth="3.2" strokeLinecap="round" />
+  </svg>
+)
+
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
+
+// Starter prompts on the empty start screen: each fills the composer and picks a format.
+const STARTERS = [
+  { label: 'Explainer', text: 'A 45-second explainer on why Filipinos love ube', content: 'explainer' },
+  { label: 'Story', text: 'The story of how the jeepney was born from leftover army jeeps', content: 'story' },
+  { label: 'Listicle', text: '5 Manila street foods you have to try', content: 'listicle' },
+  { label: '3D showcase', text: 'How a city bus route works: the depot, the stops and the fare', content: 'showcase', style: '3d' },
+]
+
+const SAVE_KEY = 'blockcut.project.v1' // storage key kept from the old name so saved projects survive
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
 // Footage endpoints are built on the server side (HANDOFF.md, Codex brief); a 404 means that part isn't installed yet.
 const FOOTAGE_MISSING = 'The footage API is unavailable. Start or restart server.py, then try again.'
@@ -413,7 +432,7 @@ export default function App() {
   function download() {
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }))
-    a.download = 'blockcut-project.json'
+    a.download = 'shortcut-project.json'
     a.click()
   }
 
@@ -504,7 +523,7 @@ export default function App() {
     <div className={`studio ${started ? 'started' : ''}`}>
       {started && (
         <nav className="rail" aria-label="Panels">
-          <div className="rail-brand" title="Blockcut">B</div>
+          <div className="rail-brand" title="ShortCut"><Logo size={34} /></div>
           {(Object.keys(ICONS) as PanelId[]).map((id, k) => (
             <button key={id} className={`rail-btn ${panel === id ? 'on' : ''}`} style={{ animationDelay: `${k * 70}ms` }}
               data-label={ICONS[id].label} aria-label={ICONS[id].label} onClick={() => setPanel(panel === id ? null : id)}>
@@ -539,7 +558,7 @@ export default function App() {
         )}
 
         {(!started || leaving) && (
-          <div className={`hero ${leaving ? 'leaving' : ''} ${cooking ? 'cooking' : ''}`}>
+          <div className={`hero ${leaving ? 'leaving' : ''} ${cooking ? 'cooking' : 'empty'}`}>
             {cooking || leaving ? (
               <div className="cook" role="status" aria-live="polite">
                 <svg className="pot" viewBox="0 0 120 100" aria-hidden="true">
@@ -560,11 +579,15 @@ export default function App() {
               </div>
             ) : (
             <>
-            <h1>What video should we make?</h1>
-            <p className="tip">Any topic: food, history, games, explainers. Blockcut researches it, writes the script, builds the storyboard and edits it.</p>
+            <div className="welcome">
+              <Logo size={40} />
+              <h1>{greeting()}</h1>
+            </div>
+            <p className="welcome-sub">What video should we make today? ShortCut researches it, writes the script, builds the storyboard and voices it.</p>
+            <div className="composer">
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={3} autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-              placeholder="e.g. A 45-second explainer on why Filipinos love ube" aria-label="Describe your video" />
+              placeholder="Describe your video…" aria-label="Describe your video" />
             <div className="hero-opts">
               <select value={content} onChange={(e) => { if (e.target.value === '__new') setNewStyle(true); else setContent(e.target.value) }} aria-label="Content style"
                 title={contentStyles.find((c) => c.id === content)?.description ?? 'The AI picks the format that fits your prompt'}>
@@ -582,11 +605,21 @@ export default function App() {
               <select value={aspect} onChange={(e) => setAspect(e.target.value as Aspect)} aria-label="Format">
                 {(Object.keys(ASPECTS) as Aspect[]).map((k) => <option key={k} value={k}>{ASPECTS[k].label}</option>)}
               </select>
-              <label className="check-row"><input type="checkbox" checked={autoImages} onChange={(e) => setAutoImages(e.target.checked)} /> Find topic images</label>
-              <button onClick={send} disabled={!!busy || !input.trim()}>Generate ✦</button>
+              <label className="check-row" title="Search the web for photos of the topic"><input type="checkbox" checked={autoImages} onChange={(e) => setAutoImages(e.target.checked)} /> Images</label>
+              <button className="send" onClick={send} disabled={!!busy || !input.trim()} aria-label="Generate video" title="Generate (Enter)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+              </button>
+            </div>
+            </div>
+            <div className="starters">
+              {STARTERS.map((st) => (
+                <button key={st.label} onClick={() => { setInput(st.text); setContent(st.content); if (st.style) setStyle(st.style as Style) }}>
+                  <b>{st.label}</b> {st.text}
+                </button>
+              ))}
             </div>
             {newStyle && <div className="hero-style">
-              <small className="tip">Paste a YouTube video and Blockcut learns its format, writing and cut rhythm (not its words or footage).</small>
+              <small className="tip">Paste a YouTube video and ShortCut learns its format, writing and cut rhythm (not its words or footage).</small>
               <StyleFromUrl onDone={(st) => { setContent(st.id); setNewStyle(false) }} />
             </div>}
             <label className="hero-footage">or start from your own video clip

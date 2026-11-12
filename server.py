@@ -1,4 +1,4 @@
-"""Blockcut API: topic -> research (ScrapeGraphAI) -> segmented video plan (Claude); per-segment AI edits;
+"""ShortCut API (formerly Blockcut): topic -> research (ScrapeGraphAI) -> segmented video plan (Claude); per-segment AI edits;
 asset bucket; voiceover (Edge TTS) + word-timed captions (Whisper).
 
 POST /api/plan  {topic, style, pace, aspect, assets}                 -> plan
@@ -1336,5 +1336,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("BLOCKCUT_PORT", "8787"))  # parallel agents test on their own port
-    print(f"Blockcut API on http://localhost:{port}")
+    print(f"ShortCut API on http://localhost:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

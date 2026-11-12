@@ -299,7 +299,7 @@ function MusicPanel({ plan, change, snapshot }: Edit) {
           onChange={(e) => change({ ...plan, music: { ...plan.music!, volume: Number(e.target.value) } })} /></label>}
       </div>
       {plan.music && <audio key={plan.music.url} src={plan.music.url} controls preload="none" className="music-preview" />}
-      <small className="tip">Original loops made by Blockcut (royalty-free). Music dips under the voiceover.</small>
+      <small className="tip">Original loops made by ShortCut (royalty-free). Music dips under the voiceover.</small>
     </>
   )
 }
