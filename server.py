@@ -958,13 +958,19 @@ def find(body: dict) -> list:
     limit = max(1, min(int(body.get("limit", 8)), 12))
     candidates = search_assets({"query": q, "kinds": ["image"], "limit": limit})["candidates"]
     out = []
-    for candidate in candidates:
-        try:
-            item = import_asset({"candidate": candidate})
-            out.append({k:item[k] for k in ("url", "name", "source") if k in item} | {"license":item.get("license", ""), "author":item.get("author", "")})
-            if len(out) >= limit: break
-        except Exception as e:
-            print("asset import skipped:", candidate.get("source_page", ""), repr(e)[:120])
+    pool = concurrent.futures.ThreadPoolExecutor(8)  # parallel downloads; whatever lands within 30 s is used, stragglers are dropped
+    futures = {pool.submit(import_asset, {"candidate": c}): c for c in candidates}
+    try:
+        for f in concurrent.futures.as_completed(futures, timeout=30):
+            try:
+                item = f.result()
+                out.append({k:item[k] for k in ("url", "name", "source") if k in item} | {"license":item.get("license", ""), "author":item.get("author", "")})
+                if len(out) >= limit: break
+            except Exception as e:
+                print("asset import skipped:", futures[f].get("source_page", ""), repr(e)[:120])
+    except concurrent.futures.TimeoutError:
+        print("asset import: slow downloads skipped")
+    pool.shutdown(wait=False, cancel_futures=True)
     if not out:
         out = find_images(q, limit)  # retain ScrapeGraphAI + DDG as a last-resort source
     if not out:

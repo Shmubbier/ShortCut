@@ -23,13 +23,20 @@ def _json(url, timeout=8):
         return json.loads(r.read(5_000_000))
 
 
-def _get(url, cap):
+def _get(url, cap, total=20.0):
+    """Download with a size cap and a hard total-time cap (urlopen's timeout is per read, so a slow trickle never fires it)."""
+    import time
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=12) as r:
-        data = r.read(cap + 1)
-        if len(data) > cap:
-            raise ValueError("asset exceeds size limit")
-        return data, r.headers.get_content_type()
+    started = time.monotonic()
+    with urllib.request.urlopen(req, timeout=10) as r:
+        chunks, size = [], 0
+        while chunk := r.read(256 * 1024):
+            chunks.append(chunk); size += len(chunk)
+            if size > cap:
+                raise ValueError("asset exceeds size limit")
+            if time.monotonic() - started > total:
+                raise TimeoutError(f"download took over {total:.0f} s")
+        return b"".join(chunks), r.headers.get_content_type()
 
 
 def _candidate(kind, url, preview, title, page, license="", author="", width=None, height=None, duration=None, fmt="", provider="unknown"):
@@ -43,7 +50,7 @@ def _candidate(kind, url, preview, title, page, license="", author="", width=Non
 def _commons(q, kind, limit):
     params = {"action":"query", "format":"json", "generator":"search", "gsrsearch":q,
               "gsrnamespace":"6", "gsrlimit":str(limit * 2), "prop":"imageinfo", "iiprop":"url|size|extmetadata",
-              "iiurlwidth":"640"}
+              "iiurlwidth":"1280"}
     data = _json("https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params))
     out=[]
     for p in (data.get("query",{}).get("pages",{}) or {}).values():
@@ -53,7 +60,9 @@ def _commons(q, kind, limit):
                 or kind == "model" and ext != "glb"):
             continue
         m=info.get("extmetadata",{}); val=lambda k: re.sub("<[^>]+>","",(m.get(k) or {}).get("value",""))[:250]
-        c=_candidate(kind, original, info.get("thumburl",original), p.get("title",""), "https://commons.wikimedia.org/wiki/"+urllib.parse.quote(p.get("title","")), val("LicenseShortName"), val("Artist"), info.get("width"), info.get("height"), None, ext, "Wikimedia Commons")
+        # Images: fetch Commons' 1280 px thumbnail (~20x smaller than the original, plenty for a video frame).
+        url = info.get("thumburl") or original if kind == "image" else original
+        c=_candidate(kind, url, info.get("thumburl",original), p.get("title",""), "https://commons.wikimedia.org/wiki/"+urllib.parse.quote(p.get("title","")), val("LicenseShortName"), val("Artist"), info.get("width"), info.get("height"), None, ext, "Wikimedia Commons")
         if c: out.append(c)
     return out
 
@@ -142,13 +151,18 @@ def search(query, kinds=("image","video","model"), limit=8):
             if kind=="image": tasks.append((kind,"DuckDuckGo",lambda v=variant:_ddg(v,limit)))
             if kind=="model" and variant==q: tasks.append((kind,"Polyfork",lambda v=variant:_polyfork(v,limit)))
     results=[]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
-        futures={pool.submit(fn):(kind,src) for kind,src,fn in tasks}
-        for f,(kind,src) in futures.items():
+    pool=concurrent.futures.ThreadPoolExecutor(max_workers=12)
+    futures={pool.submit(fn):(kind,src) for kind,src,fn in tasks}
+    try:
+        for f in concurrent.futures.as_completed(futures, timeout=12):  # slow sources are left behind, not waited on
+            kind,src=futures[f]
             try:
-                rows=f.result(timeout=16); print(f"asset_search {src} [{kind}]: {len(rows)}", flush=True)
+                rows=f.result(); print(f"asset_search {src} [{kind}]: {len(rows)}", flush=True)
                 results.extend(rows)
             except Exception as e: print(f"asset_search {src} [{kind}] failed: {str(e)[:160]}", flush=True)
+    except concurrent.futures.TimeoutError:
+        print("asset_search: slow sources skipped:", sorted({futures[f][1] for f in futures if not f.done()}), flush=True)
+    pool.shutdown(wait=False, cancel_futures=True)
     buckets={}; seen=set()
     for c in results:
         k=(c["kind"],c["url"])
