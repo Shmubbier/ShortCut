@@ -297,7 +297,17 @@ def ask(prompt: str, schema, research: bool = False):
             print("Claude Code failed, using Codex:", repr(e)[:200])
             mode = "codex"
     if mode == "codex":
-        return ask_codex(prompt, schema, research)
+        try:
+            return ask_codex(prompt, schema, research)
+        except Exception as e:  # Codex drops its connection now and then ("Reconnecting..."): one retry, then Claude
+            print("Codex failed, retrying once:", repr(e)[:200])
+            try:
+                return ask_codex(prompt, schema, research)
+            except Exception as e2:
+                if not _cli_ok[1]:
+                    raise
+                print("Codex failed again, using Claude Code:", repr(e2)[:200])
+                return ask_cli(prompt, schema, research)
     import anthropic
 
     # Streamed: 3D recipes make long outputs, and a non-streamed request that long can hit HTTP timeouts.
@@ -430,8 +440,8 @@ def wants_custom_model(prompt: str) -> bool:
 
 
 def model_guide(custom: bool) -> str:
-    query = ("Pick each segment's visual on its own; MIX 3D models and photos in one video. Give model_query (2-3 plain catalogue nouns, "
-             "e.g. fruit basket, bus, windmill; optional model_want = palette remix words like purple, night) ONLY when the segment's "
+    query = ("Pick each segment's visual on its own; MIX 3D models and photos in one video. Give model_query (1-2 plain words, main noun LAST, at most one describing word: "
+             "e.g. bus, windmill, oxygen cylinder, delivery truck; the catalogue matches strictly on that last noun; optional model_want = palette remix words like purple, night) ONLY when the segment's "
              "subject is a concrete physical object (vehicle, food, building, animal, tool, gadget). For people, real places, landscapes, "
              "events, maps, documents and evidence, set model_query \"\" and use a bucket image in `asset` instead. "
              "Aim for roughly half model segments and half photo segments when both fit the topic.")
@@ -962,6 +972,12 @@ def import_asset(body: dict) -> dict:
     path.write_bytes(raw)
     url = f"/{'footage' if kind == 'video' else 'models3d'}/{path.name}"
     meta = {"name": c.get("title", path.name)[:60], "source": c.get("source_page", ""), "license": c.get("license", ""), "author": c.get("author", "")}
+    if kind == "model" and str(c.get("preview_url", "")).startswith("https://"):
+        try:  # keep the rendered preview locally so the library shows the model, not just its name
+            thumb = path.with_suffix(".png"); thumb.write_bytes(urllib.request.urlopen(c["preview_url"], timeout=8).read())
+            meta["thumbnail"] = f"/models3d/{thumb.name}"
+        except Exception as e:
+            print("model thumbnail failed:", repr(e)[:120])
     path.with_name(path.name + ".json").write_text(json.dumps(meta), encoding="utf-8")
     duration = c.get("duration")
     if kind == "video":
@@ -1227,7 +1243,8 @@ class Handler(BaseHTTPRequestHandler):
             for p in folder.glob("*.glb") if folder.exists() else []:
                 side = p.with_name(p.name + ".json")
                 meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
-                rows.append({"url": f"/models3d/{p.name}", "name": meta.get("title") or p.name, **meta})
+                thumb = meta.get("thumbnail") or (f"/models3d/{p.stem}.png" if p.with_suffix(".png").exists() else None)
+                rows.append({"url": f"/models3d/{p.name}", "name": meta.get("title") or meta.get("name") or p.stem, **meta, "thumbnail": thumb})
             return self.reply(rows, 200)
         if self.path.startswith("/api/render/"):
             rid = self.path.rsplit("/", 1)[-1]

@@ -23,9 +23,9 @@ export const spans = (plan: Plan) => {
   })
 }
 
-export function Flyout({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Flyout({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   return (
-    <section className="flyout" aria-label={title}>
+    <section className={`flyout${wide ? ' wide' : ''}`} aria-label={title}>
       <header><b>{title}</b><button className="x" onClick={onClose} aria-label={`Close ${title}`}>×</button></header>
       <div className="flyout-body">{children}</div>
     </section>

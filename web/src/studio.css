@@ -173,3 +173,16 @@
   .flyout { left: 56px; }
   .hero.leaving { transform: translate(-30vw, 40vh) scale(.08); }
 }
+
+/* Assets flyout: wider, with real-size image and model previews (two per row, panel scrolls instead of a tiny box) */
+.flyout.wide { width: 460px; }
+.flyout.wide .grid.assets { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; gap: 10px; }
+.flyout.wide .fx.asset, .flyout.wide .clip { min-width: 0; }
+.flyout.wide .clips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.flyout.wide .fx.asset img, .flyout.wide .fx.asset video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--paper2); }
+.flyout.wide .fx.asset span { font-size: 12px; }
+.flyout.wide .fx.asset small { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx.asset img.model-thumb, .model-tile img { object-fit: contain !important; background: #fff8ef; }
+.model-tile img { width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; pointer-events: none; }
+.model-preview { aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: 6px; background: var(--paper2); font-size: 11px; color: var(--muted); }
+.search-results { border-bottom: 1.5px dashed var(--ink); padding-bottom: 10px; }

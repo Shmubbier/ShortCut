@@ -20,31 +20,46 @@ def _get(url: str, timeout: float = 7.0):
         return r.read()
 
 
+def _terms(text: str) -> list[str]:
+    """Lower-case words with a simple plural strip, so 'baskets' matches 'basket'."""
+    return [w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w for w in re.findall(r"[a-z0-9]+", text.lower())]
+
+
 def _queries(query: str, cls: str | None):
-    words = re.findall(r"[\w-]+", query.lower())
-    choices = [" ".join(words[:i]) for i in range(min(3, len(words)), 0, -1)]
-    inferred = cls or ("vehicle" if any(w in words for w in ("bus", "jeepney", "car", "truck")) else
-                       "building" if any(w in words for w in ("windmill", "house", "tower")) else
-                       "prop" if any(w in words for w in ("basket", "fruit", "food")) else None)
-    return [(q, None) for q in choices] + ([ ("", inferred) ] if inferred else [])
+    """Full phrase, then the head noun alone (the catalogue is a word match). No class-only browsing: too loose."""
+    words = _terms(query)
+    return [(q, cls) for q in dict.fromkeys([" ".join(words), words[-1]] if words else [])]
 
 
-def _score(row: dict, query: str):
-    terms = set(re.findall(r"[\w-]+", query.lower()))
-    title = str(row.get("title") or row.get("name") or "").lower()
-    title_terms = set(re.findall(r"[\w-]+", title))
-    description = str(row.get("description", "")).lower()
-    desc_terms = set(re.findall(r"[\w-]+", description))
-    tris = row.get("triangles") or row.get("triangle_count") or 999999
-    normalized_query = " ".join(re.findall(r"[\w-]+", query.lower()))
-    return len(terms & title_terms) * 1000 + len(terms & desc_terms) * 100 + (2500 if title.strip() == normalized_query else 0) + (500 if normalized_query and normalized_query in title else 0) - int(tris) / 100000
+def _head(words: list[str]) -> str:
+    """Main noun of a title: last word before 'of'/'and'/'with' ('Basket of Humitas' -> basket,
+    'Ice Axe and Crampon Set' -> axe), else the last word."""
+    cut = next((i for i, w in enumerate(words) if i and w in ("of", "and", "with")), len(words))
+    return words[cut - 1]
+
+
+def _match(row: dict, query: str) -> int:
+    """Strict: the title's main noun must BE the query's main noun ('bus' accepts 'Campus Shuttle Bus', rejects
+    'Bus Shelter'). With describing words, one must appear in the title or description. Returns a score, 0 = reject."""
+    terms = _terms(query)
+    title_words = _terms(str(row.get("title") or row.get("name") or ""))
+    if not terms or not title_words or _head(title_words) != terms[-1]:
+        return 0
+    title, desc, rest = set(title_words), set(_terms(str(row.get("description", "")))), set(terms[:-1])
+    # 'fruit basket' must not become 'Laundry Basket': a describing word must be in the title or description
+    # (search rows carry no description, so `_full` marks rows Polyfork itself counted as matching every word).
+    if rest and not rest & (title | desc) and not row.get("_full"):
+        return 0
+    tris = row.get("triangles") or row.get("triangle_count") or 5000
+    extra = len(title - set(terms))  # fewer unrelated title words = closer match
+    return 1000 + 300 * len(rest & title) + 100 * len(rest & desc) - 40 * extra - int(tris) // 1000
 
 
 def resolve(query: str, cls: str | None = None, want: str = "", deadline: float | None = None):
     """Find and cache best free match; each HTTP request is capped at 8s."""
     started = time.monotonic()
     deadline = deadline or started + 20
-    cachekey = hashlib.sha256(("v3|" + query + "|" + str(cls) + "|" + want).encode()).hexdigest()
+    cachekey = hashlib.sha256(("v7|" + query + "|" + str(cls) + "|" + want).encode()).hexdigest()
     CACHE.mkdir(parents=True, exist_ok=True)
     cached = CACHE / f"{cachekey}.json"
     if cached.exists():
@@ -71,7 +86,11 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
         if q: args["q"] = q
         if category: args["class"] = category
         data = json.loads(_get(BASE + "/api/assets?" + urllib.parse.urlencode(args), max(.1, min(8, deadline-time.monotonic()))))
-        return item, data.get("assets", data.get("results", data.get("items", [])))
+        rows = data.get("assets", data.get("results", data.get("items", [])))
+        # Relevance-ranked: the first `full` rows matched every word. Only the full-phrase search counts (a one-word
+        # head-noun search 'fully' matches everything with that noun).
+        full = int(data.get("full_matches") or 0) if q == " ".join(_terms(query)) else 0
+        return item, [{**r, "_full": i < full} for i, r in enumerate(rows)]
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(queries) or 1)) as pool:
         futures = [pool.submit(search, x) for x in queries]
         for f in concurrent.futures.as_completed(futures, timeout=max(.1, deadline-time.monotonic())):
@@ -80,12 +99,16 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
             except Exception:
                 pass
     rows = [row for group in rows_by_query.values() for row in group if row.get("free", True)]
+    rows = list({r.get("id"): r for r in sorted(rows, key=lambda r: bool(r.get("_full")))}.values())  # dedupe; _full copies sort last so they win
     if not rows:
         return None
-    rows.sort(key=lambda r: _score(r, query), reverse=True)
+    rows = [r for r in rows if _match(r, query)]
+    if not rows:
+        return None
+    rows.sort(key=lambda r: _match(r, query), reverse=True)
     row = rows[0]
     ident = row.get("id") or row.get("slug")
-    if not ident or _score(row, query) < 100:
+    if not ident:
         return None
     title = row.get("title") or row.get("name") or ident
     source = f"{BASE}/asset/{ident}"
@@ -112,10 +135,24 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
         data = _get(glb_url if isinstance(glb_url, str) and glb_url.startswith("https://") else BASE + f"/cdn/{urllib.parse.quote(str(model_id))}.glb", max(.1, min(8, deadline-time.monotonic())))
         glb.write_bytes(data)
     license_name = row.get("license") or row.get("licence") or "Polyfork free asset (see source)"
+    thumb = glb.with_suffix(".png")
+    if not thumb.exists() and str(row.get("thumbnail", "")).startswith("https://"):
+        try: thumb.write_bytes(_get(row["thumbnail"], max(.1, min(8, deadline-time.monotonic()))))
+        except Exception: pass
     info = {"url": f"/models3d/{filename}", "id": model_id, "title": title, "source": source, "license": license_name,
             "credit": row.get("credit") or row.get("author") or "Polyfork", "triangles": row.get("triangles") or row.get("triangle_count"),
-            "remix": variant.get("call") if variant else None, "remix_confidence": variant.get("confidence") if variant else None}
+            "thumbnail": f"/models3d/{thumb.name}" if thumb.exists() else None, "remix": variant.get("call") if variant else None, "remix_confidence": variant.get("confidence") if variant else None}
     sidecar.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     cached.write_text(json.dumps(info), encoding="utf-8")
     info["elapsed"] = round(time.monotonic() - started, 2)
     return info
+
+
+if __name__ == "__main__":  # offline self-check of the strict matcher
+    m = lambda title, q, full=False: _match({"title": title, "_full": full}, q)
+    assert _head(_terms("Basket of Humitas")) == "basket" and _head(_terms("Ice Axe and Crampon Set")) == "axe"
+    assert m("City Bus", "bus") and not m("Bus Shelter", "bus")
+    assert not m("Laundry Basket", "fruit basket") and m("Basket of Produce", "fruit basket", full=True)
+    assert m("Ice Axe and Crampon Set", "ice axe") and not m("Hand Axe", "ice axe")
+    assert m("Coffee Cup", "coffee cup") > m("Takeaway Coffee Cup", "coffee cup")
+    print("polyfork matcher OK")

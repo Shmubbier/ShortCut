@@ -90,6 +90,14 @@ def _nasa(q, kind, limit):
     return out
 
 
+def _polyfork(q, limit):
+    """Free low-poly GLBs from Polyfork (no key), each with a rendered thumbnail for the library."""
+    data=_json("https://polyfork.dev/api/assets?"+urllib.parse.urlencode({"q":q,"free":"1","max_triangles":"5000","per_page":limit}))
+    return [c for x in data.get("assets",[]) if x.get("free",True) and x.get("id")
+            if (c:=_candidate("model","https://polyfork.dev/cdn/"+urllib.parse.quote(x["id"])+".glb",x.get("thumbnail"),x.get("title"),
+                              x.get("page") or "https://polyfork.dev/asset/"+x["id"],"Polyfork free asset (see source)","Polyfork",fmt="glb",provider="Polyfork"))]
+
+
 def _ddg(q, limit):
     try:
         from ddgs import DDGS
@@ -112,6 +120,7 @@ def search(query, kinds=("image","video","model"), limit=8):
             tasks.append((kind,"Openverse",lambda v=variant,k=kind:_openverse(v,k,limit)))
             if kind in ("image","video"): tasks.append((kind,"NASA",lambda v=variant,k=kind:_nasa(v,k,limit)))
             if kind=="image": tasks.append((kind,"DuckDuckGo",lambda v=variant:_ddg(v,limit)))
+            if kind=="model" and variant==q: tasks.append((kind,"Polyfork",lambda v=variant:_polyfork(v,limit)))
     results=[]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         futures={pool.submit(fn):(kind,src) for kind,src,fn in tasks}
@@ -120,7 +129,6 @@ def search(query, kinds=("image","video","model"), limit=8):
                 rows=f.result(timeout=16); print(f"asset_search {src} [{kind}]: {len(rows)}", flush=True)
                 results.extend(rows)
             except Exception as e: print(f"asset_search {src} [{kind}] failed: {str(e)[:160]}", flush=True)
-    # There is no stable public Poly Pizza/Polyfork query API. Never claim a result that cannot be resolved to a direct GLB.
     buckets={}; seen=set()
     for c in results:
         k=(c["kind"],c["url"])

@@ -76,7 +76,7 @@ export default function App() {
   const [findQuery, setFindQuery] = useState('')
   const [searchKinds, setSearchKinds] = useState<Array<'image'|'video'|'model'>>(['image','video','model'])
   const [searchResults, setSearchResults] = useState<AssetCandidate[]>([])
-  const [models, setModels] = useState<Array<{url:string;name:string;source?:string;license?:string}>>([])
+  const [models, setModels] = useState<Array<{url:string;name:string;source?:string;license?:string;thumbnail?:string|null}>>([])
   const [autoImages, setAutoImages] = useState(true)
   const [assetMsg, setAssetMsg] = useState('')
   const [clips, setClips] = useState<Clip[]>(saved?.clips ?? [])
@@ -87,6 +87,7 @@ export default function App() {
   planRef.current = plan
 
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}); api('/api/models3d').then(setModels).catch(() => {}) }, [])
+  useEffect(() => { if (panel === 'assets') api('/api/models3d').then(setModels).catch(() => {}) }, [panel, plan?.scenes.length]) // generation adds Polyfork models
   useEffect(() => {
     const refresh = () => { api('/api/styles').then(setContentStyles).catch(() => {}) }
     refresh()
@@ -451,7 +452,7 @@ export default function App() {
         </form>
       </div>
       {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className="fx asset">
-        {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : <div className="model-preview">3D · GLB</div>}
+        {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : c.preview_url && c.preview_url !== c.url ? <img src={c.preview_url} alt="" loading="lazy" className="model-thumb" /> : <div className="model-preview">3D · GLB</div>}
         <span title={`${c.title} · ${c.author} · ${c.source_page}`}>{c.title}</span><small>{c.license}</small><button onClick={() => importMedia(c)}>Import</button>
       </article>)}</div>}
       <div className="grid assets" onDragOver={(e) => e.preventDefault()}
@@ -494,7 +495,7 @@ export default function App() {
           </div>
         ))}
       </div>
-      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip" {...tileProps({ type: 'model', url: m.url, name: m.name, license: m.license, source: m.source })}><span>{m.name} · GLB</span><small>{m.license} · {m.source}</small></div>)}</div></>}
+      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip model-tile" {...tileProps({ type: 'model', url: m.url, name: m.name, license: m.license, source: m.source })}>{m.thumbnail ? <img src={m.thumbnail} alt={m.name} loading="lazy" /> : <div className="model-preview">3D · GLB</div>}<span>{m.name}</span><small>{m.license}</small></div>)}</div></>}
       <p className="tip">Drag an image or clip onto a storyboard card or the inspector's Media box. The same asset can go on several segments.</p>
     </>
   )
@@ -514,7 +515,7 @@ export default function App() {
       )}
 
       {started && panel && (
-        <Flyout title={ICONS[panel].label} onClose={() => setPanel(null)}>
+        <Flyout title={ICONS[panel].label} onClose={() => setPanel(null)} wide={panel === 'assets'}>
           {panel === 'assets' && assetsPanel}
           {panel === 'script' && plan && <ScriptPanel plan={plan} change={change} snapshot={snapshot} sel={sel} onSelect={select} />}
           {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} />}
