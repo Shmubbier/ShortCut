@@ -532,6 +532,7 @@ def generate(topic: str, meta: dict, mode: str, body: dict) -> dict:
     look = "a visual style you choose (see direction below)" if meta["style"] == "auto" else f"the {meta['style']} visual style"
     content = body.get("content") or "auto"
     chosen = cstyles.get_style(content)
+    meta = {**meta, **cstyles.plan_settings(chosen)}  # a chosen style sets pacing and captions, not just the script
     seg = (chosen or {}).get("segments", [6, 8])
     pref = (chosen or {}).get("visual") or {}
     hint = (f"\nThis content style prefers the {pref['style']} visual style" + (f" and the {pref['palette']} palette" if pref.get("palette") else "")
@@ -581,6 +582,10 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
         scenes[i] = to_scene(e.scene, scenes[i]) | {"model_query": e.scene.model_query, "model_want": e.scene.model_want}
         scenes, prop_note = resolve_models(scenes, custom, plan.get("style", "3d"))
         return {"plan": {**plan, "scenes": scenes}, "note": e.note + prop_note}
+    restyle = cstyles.get_style(body.get("content"))
+    if restyle:  # "Restyle this video": rewrite every segment in that content style
+        instr += f'. Rewrite every segment (structure, writing, pacing) in the "{restyle["label"]}" content style and set direction.content_style to "{restyle["id"]}".'
+        plan = {**plan, "contentStyle": restyle["id"]}
     s = ask(f"""Current video plan:
 {context(plan)}
 
@@ -600,7 +605,12 @@ Add, remove or reorder segments only if asked.""", Script)
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
     vol = (plan.get("music") or {}).get("volume", 0.5)
     scenes, prop_note = resolve_models([sc | {"model_query": src.model_query, "model_want": src.model_want} for sc, src in zip(scenes, s.scenes)], custom, s.direction.style)
-    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note + prop_note}
+    out = {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}
+    if restyle:
+        out = {**out, "contentStyle": restyle["id"], **cstyles.plan_settings(restyle)}
+        if (restyle.get("visual") or {}).get("palette"):  # the reference's measured colours come with the style
+            out["theme"] = {**(out.get("theme") or {}), "palette": restyle["visual"]["palette"]}
+    return {"plan": out, "note": s.note + prop_note}
 
 
 SAMPLES = ROOT / "samples"
@@ -1221,6 +1231,7 @@ ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/ass
           "/api/footage/storyboard": storyboard_footage, "/api/render": render,
           "/api/shots/render": create_shot_job}
 ROUTES["/api/styles/from-url"] = create_style_from_url
+ROUTES["/api/styles/delete"] = lambda body: (cstyles.delete_style(str(body.get("id", ""))), {"ok": True})[1]
 
 
 class Handler(BaseHTTPRequestHandler):

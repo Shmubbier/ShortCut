@@ -56,23 +56,28 @@ export function ScriptPanel({ plan, change, sel, onSelect }: Edit & { sel: numbe
   )
 }
 
-export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileProps: (t: Tile) => object }) {
+export type SavedStyle = { id: string; label: string; description?: string; video_type?: string; custom?: boolean
+  editing?: { pace?: string; captions?: string }; visual?: { style?: string; palette?: string }
+  measured?: { cuts_per_minute?: number; median_shot_seconds?: number }; source?: { url?: string; title?: string; channel?: string } }
+
+// YouTube link -> reusable style (server job); used on the start screen and in the Style panel.
+export function StyleFromUrl({ onDone }: { onDone?: (s: SavedStyle) => void }) {
   const [refUrl, setRefUrl] = useState('')
-  const [refJob, setRefJob] = useState<{ id?: string; status?: string; stage?: string; error?: string; style?: any } | null>(null)
+  const [refJob, setRefJob] = useState<{ id?: string; status?: string; stage?: string; progress?: number; error?: string; style?: SavedStyle } | null>(null)
+  const running = ['queued', 'running'].includes(refJob?.status ?? '')
   useEffect(() => {
-    if (!refJob?.id || !['queued', 'running'].includes(refJob.status ?? '')) return
+    if (!refJob?.id || !running) return
     const timer = window.setInterval(async () => {
       try {
-        const r = await fetch(`/api/styles/jobs/${refJob.id}`)
-        const j = await r.json()
+        const j = await (await fetch(`/api/styles/jobs/${refJob.id}`)).json()
         setRefJob(j)
-        if (j.status === 'done') window.dispatchEvent(new Event('blockcut-styles-updated'))
+        if (j.status === 'done') { window.dispatchEvent(new Event('blockcut-styles-updated')); onDone?.(j.style) }
       } catch { /* next poll can recover */ }
     }, 1200)
     return () => window.clearInterval(timer)
-  }, [refJob?.id, refJob?.status])
-  const createFromUrl = async () => {
-    setRefJob({ status: 'queued', stage: 'starting' })
+  }, [refJob?.id, running])
+  const start = async () => {
+    setRefJob({ status: 'queued', stage: 'starting', progress: 0 })
     try {
       const r = await fetch('/api/styles/from-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: refUrl }) })
       const j = await r.json()
@@ -80,20 +85,65 @@ export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileP
       setRefJob(j)
     } catch (e) { setRefJob({ status: 'error', error: e instanceof Error ? e.message : String(e) }) }
   }
+  return (
+    <div className="style-from-url">
+      <form className="row" onSubmit={(e) => { e.preventDefault(); if (refUrl && !running) start() }}>
+        <input type="url" value={refUrl} onChange={(e) => setRefUrl(e.target.value)} placeholder="YouTube link (a video under 3 minutes)" aria-label="YouTube video link" />
+        <button type="submit" disabled={!refUrl || running}>{running ? 'Studying…' : 'Create style'}</button>
+      </form>
+      {running && <div className="style-progress"><i style={{ width: `${refJob?.progress ?? 5}%` }} /><small>{refJob?.stage}</small></div>}
+      {refJob?.error && <small role="alert" className="tip">{refJob.error}</small>}
+      {refJob?.status === 'done' && refJob.style && <small className="tip">Saved “{refJob.style.label}”. It is in the format menu under “Your styles”.</small>}
+    </div>
+  )
+}
+
+// Same rule as content_styles.plan_settings: these caption notes mean "no word captions".
+const capsOff = (c?: string) => /^\s*(none|off|minimal|no\b)|\bno (full )?(burned.in )?(subtitles|captions)/i.test(c ?? '')
+
+function StyleCard({ s, current, busy, onRestyle, onDelete }: { s: SavedStyle; current: boolean; busy: boolean; onRestyle: () => void; onDelete: () => void }) {
+  const m = s.measured
+  return (
+    <article className={`style-card${current ? ' on' : ''}`}>
+      <header><b>{s.label}</b>{current && <span className="pill">this video</span>}</header>
+      <small>{s.video_type}</small>
+      <div className="style-facts">
+        {m?.median_shot_seconds ? <span title="Measured from the reference">{m.cuts_per_minute} cuts/min · {m.median_shot_seconds}s shots</span> : null}
+        <span>{s.editing?.pace === 'documentary' ? 'Calm pace' : 'Punchy pace'}</span>
+        <span>{capsOff(s.editing?.captions) ? 'No captions' : 'Captions'}</span>
+        {s.visual?.palette && <span>{s.visual.style ?? ''} · {s.visual.palette}</span>}
+      </div>
+      {s.source?.url && <a href={s.source.url} target="_blank" rel="noreferrer">From: {s.source.title}</a>}
+      <div className="row">
+        <button onClick={onRestyle} disabled={busy || current}>{current ? 'In use' : 'Restyle this video'}</button>
+        <button className="link" onClick={onDelete} disabled={busy}>Delete</button>
+      </div>
+    </article>
+  )
+}
+
+export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy }: Edit & { tileProps: (t: Tile) => object; onRestyle: (s: SavedStyle) => void; busy: boolean }) {
+  const [mine, setMine] = useState<SavedStyle[]>([])
+  useEffect(() => {
+    const load = () => fetch('/api/styles').then((r) => r.json()).then((all: SavedStyle[]) => setMine(all.filter((x) => x.custom))).catch(() => {})
+    load()
+    window.addEventListener('blockcut-styles-updated', load)
+    return () => window.removeEventListener('blockcut-styles-updated', load)
+  }, [])
+  const remove = async (s: SavedStyle) => {
+    if (!window.confirm(`Delete the style “${s.label}”? Videos already made with it keep their script.`)) return
+    await fetch('/api/styles/delete', { method: 'POST', body: JSON.stringify({ id: s.id }) })
+    window.dispatchEvent(new Event('blockcut-styles-updated'))
+  }
   const t = resolveTheme(plan.style, plan.theme)
   const theme = (k: string, v: unknown) => { snapshot(); change({ ...plan, theme: { ...plan.theme, [k]: v } }) }
   const cap = (k: string, v: string) => { snapshot(); change({ ...plan, captionStyle: { ...plan.captionStyle, [k]: v } }) }
   return (
     <>
-      <h3>Create a style from YouTube</h3>
-      <label>YouTube video link<input type="url" value={refUrl} onChange={(e) => setRefUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /></label>
-      <button onClick={createFromUrl} disabled={!refUrl || ['queued', 'running'].includes(refJob?.status ?? '')}>
-        {['queued', 'running'].includes(refJob?.status ?? '') ? 'Studying video…' : 'Create reusable style'}
-      </button>
-      {refJob?.stage && <small className="tip">{refJob.stage}</small>}
-      {refJob?.error && <small role="alert" className="tip">{refJob.error}</small>}
-      {refJob?.style && <div className="recs"><b>{refJob.style.label}</b><small>{refJob.style.video_type} · {refJob.style.writing}</small>
-        <small>Cut pace: {refJob.style.measured?.median_shot_seconds}s median · Captions: {refJob.style.editing?.captions} · Palette: {refJob.style.visual?.palette}</small></div>}
+      <h3>Your styles</h3>
+      <small className="tip">Styles learned from YouTube videos: their structure, writing and cut rhythm. Restyle rewrites this video in one.</small>
+      {mine.map((x) => <StyleCard key={x.id} s={x} current={plan.contentStyle === x.id} busy={busy} onRestyle={() => onRestyle(x)} onDelete={() => remove(x)} />)}
+      <StyleFromUrl />
       <label>Visual style
         <select value={plan.style} onChange={(e) => { snapshot(); change({ ...plan, style: e.target.value as Style }) }}>
           {(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}

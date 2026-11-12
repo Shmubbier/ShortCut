@@ -21,7 +21,11 @@ any visual style (`Video.tsx` `Shot`). Self-check: `.venv/Scripts/python polyfor
 **Asset library:** 460 px flyout, two 4:3 tiles per row; 3D search = Polyfork with thumbnails; models refresh when the panel opens.
 
 **Open / next:**
-- "Your styles" (YouTube → reusable style, `style_ref.py`, Style panel, `styles/*.json`): Claude is reviewing/improving it now.
+- "Your styles" (YouTube → reusable style, `style_ref.py`, `styles/*.json`): create from the start screen's format menu
+  ("＋ New style from a YouTube link…") or the Style panel (`StyleFromUrl` in `Panels.tsx`); Style panel lists them as cards
+  (measured cuts/min, pace, captions, look) with **Restyle this video** (`/api/edit` + `content: <id>`) and Delete
+  (`/api/styles/delete`, custom files only). A chosen style now also sets plan pace + captions (`content_styles.plan_settings`)
+  and the reference's measured rhythm goes into the prompt (`_measured`); restyle also applies its palette. Extraction via Codex ~30 s.
 - Polyfork's search is word-based; nouns like "jeepney" have no model, so those segments use photos (expected).
 - Not yet browser-verified: voice picker with Qwen voices, dropping a Blender shot (`/api/shots/render`) on a segment, export with GLB models.
 - Leftover test servers from agents may linger (python `server.py` processes); only 8787/5173 matter.

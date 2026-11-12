@@ -9,6 +9,7 @@ A content style is independent of the visual style (editorial / 2d / pixel / 3d)
 `style_brief(id)` turns one into prompt text; `list_styles()` feeds GET /api/styles and the editor's selector.
 """
 import json
+import re
 from pathlib import Path
 
 STYLES_DIR = Path(__file__).parent / "styles"
@@ -93,6 +94,26 @@ def style_brief(style_id: str | None) -> str:
     return f"CONTENT STYLE (the user chose it; set direction.content_style to \"{s['id']}\"):\n{_rules(s)}"
 
 
+def plan_settings(s: dict | None) -> dict:
+    """What a content style fixes on the plan itself: pacing and whether word captions show."""
+    if not s:
+        return {}
+    e = s.get("editing", {})
+    out = {"pace": e["pace"]} if e.get("pace") in ("punchy", "documentary") else {}
+    cap = str(e.get("captions", "")).lower()
+    if cap:
+        out["captions"] = not re.search(r"^\s*(none|off|minimal|no\b)|\bno (full )?(burned.in )?(subtitles|captions)", cap)
+    return out
+
+
+def delete_style(style_id: str) -> None:
+    """Remove a custom style (presets can't be deleted); the id must name a file in styles/."""
+    path = STYLES_DIR / f"{style_id}.json"
+    if not re.fullmatch(r"[a-z0-9-]+", style_id or "") or not path.is_file():
+        raise ValueError("Only your own saved styles can be deleted")
+    path.unlink()
+
+
 def _rules(s: dict) -> str:
     e = s.get("editing", {})
     seg = s.get("segments", [6, 8])
@@ -100,4 +121,14 @@ def _rules(s: dict) -> str:
     return (f"[{s['id']}] {s['label']} ({s.get('video_type', '')}). Structure: {s.get('structure', '')}. Writing: {s.get('writing', '')}. "
             f"Editing pace {e.get('pace', '')}; cuts {e.get('cuts', '')}; transitions {e.get('transitions', '')}; effects {e.get('effects', '')}; captions {e.get('captions', 'on')}. "
             f"Visual look {v.get('style', 'choose to suit the content')}; palette {v.get('palette', 'choose to suit the content')}. "
-            f"Use {seg[0]}-{seg[1]} segments.")
+            f"Use {seg[0]}-{seg[1]} segments." + _measured(s))
+
+
+def _measured(s: dict) -> str:
+    """Measured rhythm of a YouTube reference, so the script's beats match how fast the original cuts."""
+    m = s.get("measured") or {}
+    if not m.get("median_shot_seconds"):
+        return ""
+    return (f" Reference rhythm: {m.get('cuts_per_minute', 0)} cuts per minute, median shot {m['median_shot_seconds']} s: "
+            + ("keep every segment's on-screen text very short and let visuals carry it." if m["median_shot_seconds"] < 2.5
+               else "let segments breathe, fewer words per segment, calm holds."))

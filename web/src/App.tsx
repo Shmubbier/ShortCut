@@ -2,7 +2,7 @@ import { Player, type PlayerRef } from '@remotion/player'
 import { useEffect, useRef, useState } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
-import { Flyout, ScriptPanel, SettingsPanel, StylePanel, type Tile } from './Panels'
+import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
 import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, type Aspect, type Plan, type SceneData } from './video/Video'
 import './App.css'
@@ -55,6 +55,7 @@ export default function App() {
   const [sel, setSel] = useState<number | null>(null)
   const [inspOpen, setInspOpen] = useState(false)
   const [panel, setPanel] = useState<PanelId | null>(null)
+  const [newStyle, setNewStyle] = useState(false) // start screen: 'New style from a YouTube link' open
   const [assistOpen, setAssistOpen] = useState(false)
   const [log, setLog] = useState<Msg[]>(saved?.log ?? [])
   const [input, setInput] = useState('')
@@ -282,14 +283,14 @@ export default function App() {
     }
   }
 
-  async function prompt(text: string, index = sel) {
+  async function prompt(text: string, index = sel, extra: Record<string, unknown> = {}) {
     if (!text || busy) return
     if (!plan) return generate(text)
     const s = scopeOf(index)
     setBusy('ai')
     say('you', text, s)
     try {
-      const r = await api('/api/edit', { plan, index, instruction: text, assets })
+      const r = await api('/api/edit', { plan, index, instruction: text, assets, ...extra })
       setPlan(r.plan)
       say('ai', r.note, s)
     } catch (e) {
@@ -518,7 +519,8 @@ export default function App() {
         <Flyout title={ICONS[panel].label} onClose={() => setPanel(null)} wide={panel === 'assets'}>
           {panel === 'assets' && assetsPanel}
           {panel === 'script' && plan && <ScriptPanel plan={plan} change={change} snapshot={snapshot} sel={sel} onSelect={select} />}
-          {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} />}
+          {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} busy={!!busy}
+            onRestyle={(st) => { snapshot(); prompt(`Restyle this video as “${st.label}”`, null, { content: st.id }) }} />}
           {panel === 'settings' && plan && <SettingsPanel plan={plan} change={(p) => {
             if (p.voiceRate !== plan.voiceRate) p = { ...p, scenes: p.scenes.map((s) => ({ ...s, audio: null, words: s.media?.type === 'video' && !s.audio ? s.words : [] })) }
             change(p)
@@ -565,13 +567,14 @@ export default function App() {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               placeholder="e.g. A 45-second explainer on why Filipinos love ube" aria-label="Describe your video" />
             <div className="hero-opts">
-              <select value={content} onChange={(e) => setContent(e.target.value)} aria-label="Content style"
+              <select value={content} onChange={(e) => { if (e.target.value === '__new') setNewStyle(true); else setContent(e.target.value) }} aria-label="Content style"
                 title={contentStyles.find((c) => c.id === content)?.description ?? 'The AI picks the format that fits your prompt'}>
                 <option value="auto">Auto format (AI picks)</option>
                 {contentStyles.filter((c) => !c.custom).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 {contentStyles.some((c) => c.custom) && <optgroup label="Your styles">
                   {contentStyles.filter((c) => c.custom).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </optgroup>}
+                <option value="__new">＋ New style from a YouTube link…</option>
               </select>
               <select value={style} onChange={(e) => setStyle(e.target.value as Style | 'auto')} aria-label="Visual style">
                 <option value="auto">Auto style (AI picks)</option>
@@ -583,6 +586,10 @@ export default function App() {
               <label className="check-row"><input type="checkbox" checked={autoImages} onChange={(e) => setAutoImages(e.target.checked)} /> Find topic images</label>
               <button onClick={send} disabled={!!busy || !input.trim()}>Generate ✦</button>
             </div>
+            {newStyle && <div className="hero-style">
+              <small className="tip">Paste a YouTube video and Blockcut learns its format, writing and cut rhythm (not its words or footage).</small>
+              <StyleFromUrl onDone={(st) => { setContent(st.id); setNewStyle(false) }} />
+            </div>}
             <label className="hero-footage">or start from your own video clip
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
