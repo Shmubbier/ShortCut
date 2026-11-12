@@ -7,4 +7,6 @@ const api = process.env.BLOCKCUT_API ?? 'http://127.0.0.1:8787'
 export default defineConfig({
   plugins: [react()],
   server: { proxy: { '/api': api, '/assets': api, '/media': api, '/music': api, '/footage': api, '/renders': api } },
+  // Bundles go to /_app so the hosted build never collides with the API's /assets route (see deploy/).
+  build: { assetsDir: '_app' },
 })
