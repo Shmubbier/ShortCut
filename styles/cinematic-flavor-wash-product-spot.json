@@ -1,0 +1,256 @@
+{
+  "id": "cinematic-flavor-wash-product-spot",
+  "label": "Cinematic Flavor-Wash Product Spot",
+  "description": "Short music-only product teaser that moves continuously through bold flavor-coded color worlds around a single drink can, then resolves on a clean white brand card.",
+  "video_type": "Cinematic product commercial / social teaser",
+  "structure": "Hook on the product in a lush color field → cycle of flavor-themed color scenes (green, orange, pink, lilac, repeat) → white end card with logo/CTA.",
+  "writing": "No voiceover. Minimal on-screen text: flavor names or one-word descriptors, then brand name and short tagline on the end card.",
+  "editing": {
+    "pace": "punchy",
+    "cuts": "Fast hard cuts about every 0.8 s (~72 per minute), often hidden inside colour washes or whip-pan hand-offs between flavour sets.",
+    "transitions": "Seamless color washes, whip-pan or match-move hand-offs between flavor sets, final fade/flash to white.",
+    "captions": "None for speech; sparse, clean sans-serif labels kept small and centered or lower-third.",
+    "effects": "Slow orbit and push-in on the can, macro detail, floating fruit/ingredients, splashes, soft shallow depth of field, glossy highlights."
+  },
+  "visual": {
+    "style": "3d",
+    "palette": "mono"
+  },
+  "segments": [
+    4,
+    10
+  ],
+  "source": {
+    "url": "https://www.youtube.com/watch?v=CBxgZxjdJyk",
+    "title": "CINEMATIC PRODUCT VIDEO | Go Good Drinks",
+    "channel": "Lauren Roberts"
+  },
+  "measured": {
+    "duration_seconds": 20.0,
+    "sampled_frames": 246,
+    "cut_count": 24,
+    "cuts_per_minute": 72.0,
+    "mean_shot_seconds": 0.8,
+    "median_shot_seconds": 0.8,
+    "dominant_palette": "mono",
+    "dominant_rgb_centroids": [
+      [
+        104,
+        69,
+        25
+      ],
+      [
+        181,
+        136,
+        120
+      ],
+      [
+        246,
+        246,
+        244
+      ]
+    ],
+    "keyframes_seconds_rgb_percentiles": [
+      {
+        "seconds": 0.0,
+        "rgb_percentiles": [
+          [
+            19,
+            60,
+            29
+          ],
+          [
+            62,
+            104,
+            57
+          ],
+          [
+            144,
+            143,
+            139
+          ]
+        ]
+      },
+      {
+        "seconds": 2.08,
+        "rgb_percentiles": [
+          [
+            151,
+            48,
+            6
+          ],
+          [
+            179,
+            56,
+            8
+          ],
+          [
+            187,
+            123,
+            118
+          ]
+        ]
+      },
+      {
+        "seconds": 4.36,
+        "rgb_percentiles": [
+          [
+            169,
+            97,
+            111
+          ],
+          [
+            188,
+            112,
+            128
+          ],
+          [
+            200,
+            124,
+            142
+          ]
+        ]
+      },
+      {
+        "seconds": 6.76,
+        "rgb_percentiles": [
+          [
+            191,
+            134,
+            163
+          ],
+          [
+            201,
+            142,
+            178
+          ],
+          [
+            219,
+            214,
+            195
+          ]
+        ]
+      },
+      {
+        "seconds": 8.84,
+        "rgb_percentiles": [
+          [
+            22,
+            73,
+            17
+          ],
+          [
+            50,
+            92,
+            27
+          ],
+          [
+            163,
+            121,
+            75
+          ]
+        ]
+      },
+      {
+        "seconds": 11.0,
+        "rgb_percentiles": [
+          [
+            153,
+            84,
+            100
+          ],
+          [
+            173,
+            100,
+            118
+          ],
+          [
+            178,
+            149,
+            155
+          ]
+        ]
+      },
+      {
+        "seconds": 13.04,
+        "rgb_percentiles": [
+          [
+            120,
+            35,
+            4
+          ],
+          [
+            152,
+            48,
+            7
+          ],
+          [
+            210,
+            192,
+            37
+          ]
+        ]
+      },
+      {
+        "seconds": 15.12,
+        "rgb_percentiles": [
+          [
+            45,
+            58,
+            4
+          ],
+          [
+            174,
+            120,
+            25
+          ],
+          [
+            197,
+            128,
+            36
+          ]
+        ]
+      },
+      {
+        "seconds": 17.36,
+        "rgb_percentiles": [
+          [
+            255,
+            255,
+            255
+          ],
+          [
+            255,
+            255,
+            255
+          ],
+          [
+            255,
+            255,
+            255
+          ]
+        ]
+      },
+      {
+        "seconds": 19.6,
+        "rgb_percentiles": [
+          [
+            255,
+            255,
+            255
+          ],
+          [
+            255,
+            255,
+            255
+          ],
+          [
+            255,
+            255,
+            255
+          ]
+        ]
+      }
+    ]
+  }
+}

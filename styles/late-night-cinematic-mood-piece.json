@@ -1,0 +1,256 @@
+{
+  "id": "late-night-cinematic-mood-piece",
+  "label": "Late-Night Cinematic Mood Piece",
+  "description": "Quiet, atmospheric short film: one unbroken, slow-moving take of a solitary late-night ritual, low-key lighting, muted teal-green shadows, minimal words.",
+  "video_type": "cinematic mood short / visual vignette",
+  "structure": "Fade up from black → slow build of one quiet moment → gentle peak in brightness mid-piece → dims back → fade to black.",
+  "writing": "Near-silent. One short, intimate dedication-style line addressed to night owls; no narration or dialogue beyond that.",
+  "editing": {
+    "pace": "documentary",
+    "cuts": "None; one continuous shot with slow camera drift instead of edits.",
+    "transitions": "Fade from black at open, fade to black at close; light changes carry the rhythm.",
+    "captions": "Minimal, small centered serif or thin sans text, appears once, lowercase, soft fade in/out.",
+    "effects": "Crushed blacks, cool teal-green grade, shallow depth of field, soft film grain, gentle vignette, steam/practical-light highlights."
+  },
+  "visual": {
+    "style": "editorial",
+    "palette": "night"
+  },
+  "segments": [
+    4,
+    4
+  ],
+  "source": {
+    "url": "https://www.youtube.com/watch?v=SR__amDl1c8",
+    "title": "2 AM COFFEE - A short film | Sony FX3 | 4K",
+    "channel": "Forrain"
+  },
+  "measured": {
+    "duration_seconds": 109.0,
+    "sampled_frames": 688,
+    "cut_count": 2,
+    "cuts_per_minute": 1.1,
+    "mean_shot_seconds": 36.33,
+    "median_shot_seconds": 26.79,
+    "dominant_palette": "night",
+    "dominant_rgb_centroids": [
+      [
+        4,
+        6,
+        7
+      ],
+      [
+        48,
+        55,
+        51
+      ],
+      [
+        112,
+        129,
+        121
+      ]
+    ],
+    "keyframes_seconds_rgb_percentiles": [
+      {
+        "seconds": 0.0,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "seconds": 12.3,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            22,
+            31,
+            27
+          ],
+          [
+            59,
+            74,
+            68
+          ]
+        ]
+      },
+      {
+        "seconds": 24.98,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            36,
+            46,
+            37
+          ],
+          [
+            93,
+            97,
+            81
+          ]
+        ]
+      },
+      {
+        "seconds": 36.83,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            14,
+            30,
+            33
+          ],
+          [
+            63,
+            80,
+            80
+          ]
+        ]
+      },
+      {
+        "seconds": 48.67,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            32,
+            42,
+            45
+          ],
+          [
+            93,
+            99,
+            99
+          ]
+        ]
+      },
+      {
+        "seconds": 60.89,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            21,
+            30,
+            33
+          ],
+          [
+            83,
+            95,
+            95
+          ]
+        ]
+      },
+      {
+        "seconds": 72.74,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            25,
+            30,
+            29
+          ],
+          [
+            80,
+            94,
+            90
+          ]
+        ]
+      },
+      {
+        "seconds": 84.58,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            21,
+            27,
+            24
+          ],
+          [
+            89,
+            89,
+            71
+          ]
+        ]
+      },
+      {
+        "seconds": 96.81,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            12,
+            17,
+            17
+          ],
+          [
+            46,
+            50,
+            41
+          ]
+        ]
+      },
+      {
+        "seconds": 108.65,
+        "rgb_percentiles": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    ]
+  }
+}

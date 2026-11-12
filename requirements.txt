@@ -4,3 +4,6 @@ scrapegraphai
 edge-tts
 faster-whisper
 ddgs
+yt-dlp
+yt-dlp-ejs
+youtube-transcript-api

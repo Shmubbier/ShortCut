@@ -1,0 +1,256 @@
+{
+  "id": "whiteboard-doodle-mechanism-explaine",
+  "label": "Whiteboard Doodle Mechanism Explainer",
+  "description": "A one-minute hand-drawn explainer that follows one drug through the body as a single continuous story. A gut-level hook leads into the cell-entry and exit steps, then a feedback \"villain\" that locks the door, then a dosing-schedule fix, and it ends on a quick recap flow.",
+  "video_type": "animated doodle pharmacology explainer (~60s)",
+  "structure": "Cold-open hook with a personified quip → step-by-step mechanism (entry, transit, exit, carrier to destination) → problem twist (hormone feedback blocks pathway, payload lost) → practical fix with one hard stat → recap summary flow chaining every step.",
+  "writing": "Short, declarative narration in the present tense. Molecules and cells are cast as characters (doors, locks, factories, gatekeepers) with brief spoken asides. Each sentence covers one step. Technical names are kept but explained by their role. There is a single quantified takeaway, and the closing recap is written as an arrow chain.",
+  "editing": {
+    "pace": "documentary",
+    "cuts": "No hard cuts. The video is one continuous canvas, with new elements drawn in or the view panning and zooming to the next region.",
+    "transitions": "The camera pans or zooms across one whiteboard. Elements are drawn on with a hand stroke or wiped and redrawn, and the background clears to white for the recap.",
+    "captions": "Hand-lettered labels sit on the key structures (channel, door, hormone, carrier). Bold callouts appear for the stat and the summary arrows. There are no full burned-in subtitles.",
+    "effects": "Line-draw reveals, light character bobbing, and a lock or padlock icon snapping shut. Particles move along paths with arrows. One cell sloughs off with a small wobble, and the payload is shown flowing into a factory."
+  },
+  "visual": {
+    "style": "2d",
+    "palette": "mono"
+  },
+  "segments": [
+    4,
+    6
+  ],
+  "source": {
+    "url": "https://www.youtube.com/watch?v=0LAMFTKxTAs",
+    "title": "Ferrous Sulfate — How It Works (Animated Doodle Explainer)",
+    "channel": "One Minute Drugs"
+  },
+  "measured": {
+    "duration_seconds": 58.0,
+    "sampled_frames": 697,
+    "cut_count": 5,
+    "cuts_per_minute": 5.17,
+    "mean_shot_seconds": 9.67,
+    "median_shot_seconds": 4.0,
+    "dominant_palette": "mono",
+    "dominant_rgb_centroids": [
+      [
+        55,
+        39,
+        37
+      ],
+      [
+        188,
+        141,
+        135
+      ],
+      [
+        236,
+        233,
+        233
+      ]
+    ],
+    "keyframes_seconds_rgb_percentiles": [
+      {
+        "seconds": 0.0,
+        "rgb_percentiles": [
+          [
+            228,
+            228,
+            228
+          ],
+          [
+            234,
+            234,
+            234
+          ],
+          [
+            239,
+            239,
+            239
+          ]
+        ]
+      },
+      {
+        "seconds": 6.33,
+        "rgb_percentiles": [
+          [
+            227,
+            195,
+            205
+          ],
+          [
+            238,
+            231,
+            232
+          ],
+          [
+            250,
+            239,
+            241
+          ]
+        ]
+      },
+      {
+        "seconds": 12.83,
+        "rgb_percentiles": [
+          [
+            207,
+            172,
+            173
+          ],
+          [
+            229,
+            221,
+            221
+          ],
+          [
+            236,
+            232,
+            232
+          ]
+        ]
+      },
+      {
+        "seconds": 19.29,
+        "rgb_percentiles": [
+          [
+            197,
+            179,
+            180
+          ],
+          [
+            236,
+            232,
+            232
+          ],
+          [
+            244,
+            242,
+            242
+          ]
+        ]
+      },
+      {
+        "seconds": 25.75,
+        "rgb_percentiles": [
+          [
+            219,
+            202,
+            206
+          ],
+          [
+            231,
+            228,
+            229
+          ],
+          [
+            236,
+            235,
+            236
+          ]
+        ]
+      },
+      {
+        "seconds": 32.25,
+        "rgb_percentiles": [
+          [
+            176,
+            87,
+            67
+          ],
+          [
+            232,
+            219,
+            225
+          ],
+          [
+            241,
+            240,
+            246
+          ]
+        ]
+      },
+      {
+        "seconds": 38.58,
+        "rgb_percentiles": [
+          [
+            159,
+            151,
+            146
+          ],
+          [
+            230,
+            222,
+            220
+          ],
+          [
+            240,
+            240,
+            244
+          ]
+        ]
+      },
+      {
+        "seconds": 45.04,
+        "rgb_percentiles": [
+          [
+            159,
+            84,
+            74
+          ],
+          [
+            240,
+            239,
+            239
+          ],
+          [
+            244,
+            243,
+            243
+          ]
+        ]
+      },
+      {
+        "seconds": 51.54,
+        "rgb_percentiles": [
+          [
+            236,
+            236,
+            235
+          ],
+          [
+            241,
+            241,
+            241
+          ],
+          [
+            243,
+            243,
+            243
+          ]
+        ]
+      },
+      {
+        "seconds": 58.0,
+        "rgb_percentiles": [
+          [
+            225,
+            225,
+            207
+          ],
+          [
+            237,
+            237,
+            237
+          ],
+          [
+            242,
+            242,
+            242
+          ]
+        ]
+      }
+    ]
+  }
+}

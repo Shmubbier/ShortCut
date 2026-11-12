@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.request
 import uuid
@@ -1021,6 +1022,26 @@ Transcript rows (index, start/end seconds, exact text):
 
 
 RENDER_JOBS: dict[str, dict] = {}
+STYLE_JOBS: dict[str, dict] = {}
+
+
+def create_style_from_url(body: dict) -> dict:
+    url = str(body.get("url", "")).strip()
+    if not url:
+        raise ValueError("A YouTube URL is required")
+    jid = uuid.uuid4().hex[:12]
+    STYLE_JOBS[jid] = {"status": "queued", "progress": 0, "stage": "queued"}
+    def run():
+        job = STYLE_JOBS[jid]
+        try:
+            job.update(status="running", progress=5, stage="reading metadata and captions")
+            import style_ref
+            style = style_ref.extract(url, ask, lambda pct, stage: job.update(progress=pct, stage=stage))
+            job.update(status="done", progress=100, stage="style saved", style=style)
+        except Exception as e:
+            job.update(status="error", stage="failed", error=str(e)[:500])
+    threading.Thread(target=run, daemon=True).start()
+    return {"id": jid, **STYLE_JOBS[jid]}
 
 
 def _absolute_media(plan: dict) -> dict:
@@ -1081,6 +1102,7 @@ ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/ass
           "/api/assets/import": import_asset, "/api/assets/delete": delete_asset,
           "/api/footage/upload": upload_footage, "/api/footage/transcribe": transcribe_footage,
           "/api/footage/storyboard": storyboard_footage, "/api/render": render}
+ROUTES["/api/styles/from-url"] = create_style_from_url
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1089,6 +1111,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(list_assets(), 200)
         if self.path == "/api/styles":
             return self.reply(cstyles.list_styles(), 200)
+        if self.path.startswith("/api/styles/jobs/"):
+            jid = self.path.rsplit("/", 1)[-1]
+            return self.reply(STYLE_JOBS.get(jid, {"status": "not_found", "progress": 0}), 200 if jid in STYLE_JOBS else 404)
         if self.path == "/api/music":
             return self.reply(MUSIC, 200)
         if self.path == "/api/models3d":

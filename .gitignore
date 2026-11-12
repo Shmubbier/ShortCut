@@ -32,3 +32,4 @@ tools/
 briefs/voice-samples/
 shots/out/
 web/public/models3d/
+styles/*.json
