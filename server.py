@@ -1261,6 +1261,10 @@ ROUTES["/api/styles/from-url"] = create_style_from_url
 ROUTES["/api/styles/delete"] = lambda body: (cstyles.delete_style(str(body.get("id", ""))), {"ok": True})[1]
 
 
+# Routes that can take minutes: answered with keep-alive spaces so a public tunnel doesn't time them out (Handler.reply_slow).
+SLOW_ROUTES = {"/api/plan", "/api/edit", "/api/voice", "/api/assets/find", "/api/footage/transcribe", "/api/footage/storyboard"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/voices":
@@ -1349,11 +1353,40 @@ class Handler(BaseHTTPRequestHandler):
             max_request = MAX_FOOTAGE_BYTES * 4 // 3 + 2_000_000 if route_path == "/api/footage/upload" else 30_000_000
             if length > max_request:
                 raise ValueError("Request body is too large")
-            out, code = fn(json.loads(self.rfile.read(length))), 200
+            body = json.loads(self.rfile.read(length))
+            if route_path in SLOW_ROUTES:
+                return self.reply_slow(fn, body)
+            out, code = fn(body), 200
         except Exception as e:
             print(f"{self.path} failed:", repr(e))
             out, code = {"error": str(e)}, 400
         self.reply(out, code)
+
+    def reply_slow(self, fn, body):
+        """Calls that can run past 100 s (AI generation, voicing). A public tunnel (Cloudflare) drops a response that sends
+        nothing for 100 s, so send the headers now and a space every 15 s (leading whitespace is valid JSON), then the
+        result. Errors arrive as {"error": ...} with status 200, which the UI's api() treats as a failure."""
+        box = {}
+        def work():
+            try:
+                box["out"] = fn(body)
+            except Exception as e:
+                print(f"{self.path} failed:", repr(e))
+                box["out"] = {"error": str(e)}
+        t = threading.Thread(target=work, daemon=True)
+        t.start()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        try:
+            while t.is_alive():
+                t.join(15)
+                if t.is_alive():
+                    self.wfile.write(b" ")
+                    self.wfile.flush()
+            self.wfile.write(json.dumps(box["out"], ensure_ascii=False).encode())
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # the browser gave up; nothing to send to
 
     def reply(self, out, code):
         data = json.dumps(out, ensure_ascii=False).encode()

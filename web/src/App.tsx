@@ -24,7 +24,8 @@ async function api(path: string, body?: unknown) {
   if (!text) throw new Error('API server not running — start it with: .venv/Scripts/python server.py')
   if (!r.ok && !text.trimStart().startsWith('{')) throw new Error(`${r.status} ${r.statusText}`) // e.g. an HTML 404 for a route that doesn't exist yet
   const j = JSON.parse(text)
-  if (!r.ok) throw new Error(j.error)
+  // Slow routes answer 200 with keep-alive spaces, so their errors arrive as a 200 {"error": ...} (server.py reply_slow).
+  if (!r.ok || (j && typeof j === 'object' && !Array.isArray(j) && Object.keys(j).length === 1 && 'error' in j)) throw new Error(j.error)
   return j
 }
 
