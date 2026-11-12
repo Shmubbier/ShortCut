@@ -1,6 +1,30 @@
-# Blockcut handoff (Nov 12, 2026, morning; demo tonight 6-10 PM)
+# Blockcut handoff (Nov 12, 2026, updated ~17:30; demo tonight 6-10 PM)
 
 How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things stand** and **what to do next**.
+
+## Now (Nov 12, ~17:30): start here, Codex
+
+**Run it:** API `.venv/Scripts/python server.py` (:8787), UI `npm --prefix web run dev -- --port 5173` (open http://localhost:5173,
+Vite binds `localhost`, not 127.0.0.1). Both are in `.claude/launch.json` (`api`, `web`). Ports 8787/5173 are the user's live demo:
+don't restart them mid-generation.
+
+**AI backend:** `.env` (git-ignored) has `BLOCKCUT_AI=codex`, so **Codex writes every plan and edit** (`server.py` `ask_codex`:
+headless `codex exec`, read-only, `--search` when researching, strict JSON schema via `_strict()`). Codex failure → one retry →
+Claude Code CLI (if signed in) → demo sample. A researched 7-8 segment plan takes ~45-120 s. Delete the line to go Claude-first.
+
+**Visuals per segment (3D and photos mix in one video):** the AI gives `model_query` only for concrete objects (main noun LAST,
+e.g. "oxygen cylinder"); `polyfork.py` resolves it strictly (title's main noun must equal the query's; describing words must
+match the title or Polyfork's `full_matches`; no class-only browsing) and saves GLB + `.png` thumbnail to `web/public/models3d/`.
+No match → a photo. AI-written prop recipes only when the user explicitly asks to "create/build a 3D model". Models render in
+any visual style (`Video.tsx` `Shot`). Self-check: `.venv/Scripts/python polyfork.py`.
+
+**Asset library:** 460 px flyout, two 4:3 tiles per row; 3D search = Polyfork with thumbnails; models refresh when the panel opens.
+
+**Open / next:**
+- "Your styles" (YouTube → reusable style, `style_ref.py`, Style panel, `styles/*.json`): Claude is reviewing/improving it now.
+- Polyfork's search is word-based; nouns like "jeepney" have no model, so those segments use photos (expected).
+- Not yet browser-verified: voice picker with Qwen voices, dropping a Blender shot (`/api/shots/render`) on a segment, export with GLB models.
+- Leftover test servers from agents may linger (python `server.py` processes); only 8787/5173 matter.
 
 ## Director board (Nov 12, from 10:30): Claude Code directs, Codex builds in parallel
 
@@ -15,7 +39,7 @@ Codex tasks run headless via `briefs/run_codex.sh <task> <api_port> <ui_port>`, 
 | YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | **merged** (fc6d044). Director fixed cut detection (was always 0); 3 demo styles in `styles/`. Style-steered generation and panel click-through untested |
 | Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | **merged** (65e388a). Proof gates (overlap, grounding, ΔE, framing) block finals; 3 library shots pass; 1080×1920 30 fps final 107 s; `/api/shots/render` jobs → footage |
 | Codex CLI fallback for Claude limits/failures | Claude | `main` | **committed** (6626b89); forced live test passed from `codex/polyfork` after a schema-title fix. Use `BLOCKCUT_AI=codex` to rehearse without Claude. |
-| Polyfork-first 3D model chain | Codex | `codex/polyfork` | Implemented (ea3003b); merged Codex fallback (b3acf7d), strict schema fix and forced Codex plan/edit/render verified. See `briefs/polyfork.report.md`; still needs director review/merge. |
+| Polyfork-first 3D model chain | Codex | `codex/polyfork` | **merged** (58b44fd) + director fixes: per-segment model/photo mix (66245e7), strict matching and thumbnails (2aea0c5). See `briefs/polyfork.report.md`. |
 | Content styles (story, listicle, clip, tutorial, showcase, news, comedy, explainer, documentary) | Claude | `main` | done (a0ae38e) |
 | 3D: stronger 3D bias, server-side prop validation + one AI repair pass | Claude | `main` | done (1040909) |
 
