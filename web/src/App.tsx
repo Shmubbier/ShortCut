@@ -8,7 +8,8 @@ import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, ty
 import './App.css'
 import './studio.css'
 
-type Asset = { url: string; name: string; source?: string }
+type Asset = { url: string; name: string; source?: string; license?: string; author?: string }
+type AssetCandidate = { kind: 'image' | 'video' | 'model'; url: string; preview_url: string; title: string; source_page: string; license: string; author: string; width?: number; height?: number; duration?: number; format: string }
 type Clip = { url: string; name: string; duration?: number } // uploaded video footage (spec §11)
 type Passage = { start: number; end: number; text: string; words?: { text: string; start: number; end: number }[] }
 type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'clip'; url: string; name: string; duration?: number }
@@ -73,6 +74,9 @@ export default function App() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [findQuery, setFindQuery] = useState('')
+  const [searchKinds, setSearchKinds] = useState<Array<'image'|'video'|'model'>>(['image','video','model'])
+  const [searchResults, setSearchResults] = useState<AssetCandidate[]>([])
+  const [models, setModels] = useState<Array<{url:string;name:string;source?:string;license?:string}>>([])
   const [autoImages, setAutoImages] = useState(true)
   const [assetMsg, setAssetMsg] = useState('')
   const [clips, setClips] = useState<Clip[]>(saved?.clips ?? [])
@@ -82,7 +86,7 @@ export default function App() {
   const planRef = useRef(plan)
   planRef.current = plan
 
-  useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}) }, [])
+  useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}); api('/api/models3d').then(setModels).catch(() => {}) }, [])
   useEffect(() => { api('/api/styles').then(setContentStyles).catch(() => {}) }, [])
   useEffect(() => { if (!gen) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [gen])
   useEffect(() => { // autosave (skipped mid-reveal so a refresh can't save a half-shown storyboard)
@@ -370,6 +374,29 @@ export default function App() {
     }
   }
 
+  async function searchMedia(query: string) {
+    if (!query.trim() || busy || !searchKinds.length) return
+    setBusy('find'); setAssetMsg('Searching Commons, Openverse, NASA and image search…')
+    try {
+      const r = await api('/api/assets/search', { query, kinds: searchKinds, limit: 8 })
+      setSearchResults(r.candidates ?? [])
+      setAssetMsg(`Found ${r.candidates?.length ?? 0} candidates. Import a result to add it to the library.`)
+    } catch (e) { setAssetMsg(errText(e)) } finally { setBusy('') }
+  }
+
+  async function importMedia(candidate: AssetCandidate) {
+    setAssetMsg(`Importing ${candidate.title}…`)
+    try {
+      const item = await api('/api/assets/import', { candidate })
+      if (item.kind === 'image') setAssets((a) => [...a, item])
+      else if (item.kind === 'video') setClips((a) => [...a, item])
+      else setModels((a) => [...a, item])
+      setAssetMsg(item.kind === 'video' && item.duration > 60
+        ? `Imported ${item.name} (${item.duration.toFixed(1)}s). Drag it to a segment to use a short slice.`
+        : `Imported ${item.name} · ${item.license || 'licence unknown'}`)
+    } catch (e) { setAssetMsg(`Could not import: ${errText(e)}`) }
+  }
+
   async function removeAsset(url: string) {
     await api('/api/assets/delete', { url }).catch(() => {})
     setAssets((a) => a.filter((x) => x.url !== url))
@@ -406,22 +433,27 @@ export default function App() {
   const assetsPanel = (
     <>
       <div className="asset-add">
-        <form onSubmit={(e) => { e.preventDefault(); findImages(findQuery || plan?.title || '') }}>
-          <input value={findQuery} onChange={(e) => setFindQuery(e.target.value)} placeholder={plan ? `Find images: ${plan.title}` : 'Find images for a topic'} aria-label="Topic to find images for" />
-          <button type="submit" disabled={!!busy || !(findQuery || plan?.title)}>{busy === 'find' ? 'Searching…' : 'Find'}</button>
+        <form onSubmit={(e) => { e.preventDefault(); searchMedia(findQuery || plan?.title || '') }}>
+          <input value={findQuery} onChange={(e) => setFindQuery(e.target.value)} placeholder={plan ? `Search assets: ${plan.title}` : 'Search images, video or 3D'} aria-label="Topic to search for assets" />
+          <button type="submit" disabled={!!busy || !(findQuery || plan?.title)}>{busy === 'find' ? 'Searching…' : 'Search'}</button>
         </form>
+        <div className="row asset-kinds">{(['image','video','model'] as const).map((kind) => <label key={kind}><input type="checkbox" checked={searchKinds.includes(kind)} onChange={(e) => setSearchKinds((k) => e.target.checked ? [...k, kind] : k.filter((x) => x !== kind))} /> {kind === 'model' ? '3D' : kind === 'image' ? 'Images' : 'Video'}</label>)}</div>
         <label className="upload">Upload images<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} hidden /></label>
         <form onSubmit={(e) => { e.preventDefault(); scrape() }}>
           <input value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} placeholder="Paste a page URL to grab its images" aria-label="Page URL to scrape images from" />
           <button type="submit" disabled={!scrapeUrl.trim()}>Grab</button>
         </form>
       </div>
+      {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className="fx asset">
+        {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : <div className="model-preview">3D · GLB</div>}
+        <span title={`${c.title} · ${c.author} · ${c.source_page}`}>{c.title}</span><small>{c.license}</small><button onClick={() => importMedia(c)}>Import</button>
+      </article>)}</div>}
       <div className="grid assets" onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}>
         {assets.map((a) => (
           <div key={a.url} className="fx asset" {...tileProps({ type: 'asset', url: a.url, name: a.name })}>
             <img src={a.url} alt={a.name} title={a.source ? `From ${a.source}` : a.name} />
-            <span>{a.name}</span>
+            <span>{a.name}{a.license ? ` · ${a.license}` : ''}</span>
             <button className="x del" onClick={(e) => { e.stopPropagation(); removeAsset(a.url) }} aria-label={`Delete ${a.name}`}>×</button>
           </div>
         ))}
@@ -456,6 +488,7 @@ export default function App() {
           </div>
         ))}
       </div>
+      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip"><span>{m.name} · GLB</span><small>{m.license} · {m.source}</small></div>)}</div></>}
       <p className="tip">Drag an image or clip onto a storyboard card or the inspector's Media box. The same asset can go on several segments.</p>
     </>
   )
