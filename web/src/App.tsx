@@ -67,6 +67,8 @@ export default function App() {
   const [previewIn, setPreviewIn] = useState(!!saved?.plan)
   const [toast, setToast] = useState<{ text: string; undo: boolean } | null>(null)
   const [style, setStyle] = useState<Style | 'auto'>('auto')
+  const [content, setContent] = useState('auto') // content style id (explainer, story, listicle, …, or a custom one)
+  const [contentStyles, setContentStyles] = useState<{ id: string; label: string; description: string; custom?: boolean }[]>([])
   const [aspect, setAspect] = useState<Aspect>('9:16')
   const [assets, setAssets] = useState<Asset[]>([])
   const [scrapeUrl, setScrapeUrl] = useState('')
@@ -81,6 +83,7 @@ export default function App() {
   planRef.current = plan
 
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}) }, [])
+  useEffect(() => { api('/api/styles').then(setContentStyles).catch(() => {}) }, [])
   useEffect(() => { if (!gen) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [gen])
   useEffect(() => { // autosave (skipped mid-reveal so a refresh can't save a half-shown storyboard)
     if (gen) return
@@ -233,7 +236,7 @@ export default function App() {
         stageDone()
         return []
       }) : Promise.resolve([])
-      const planTask: Promise<Plan & { note?: string }> = api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets })
+      const planTask: Promise<Plan & { note?: string }> = api('/api/plan', { topic: text, style, content, aspect, pace: 'punchy', assets })
         .then((result: Plan & { note?: string }) => { stageDone(); return result })
       const [p, found] = await Promise.all([planTask, imageTask])
       if (found.length) {
@@ -488,6 +491,7 @@ export default function App() {
         {started && (
           <header>
             <b>{plan?.title ?? 'Generating…'}</b>
+            {plan?.contentStyle && <span className="chip" title="Content style: ask the assistant to change it, e.g. 'make it a story'">{contentStyles.find((c) => c.id === plan.contentStyle)?.label ?? plan.contentStyle}</span>}
             <button className="ghost" onClick={undo} disabled={!history.length}>Undo</button>
             <button className="ghost" onClick={newProject} disabled={!!gen}>New video</button>
           </header>
@@ -521,6 +525,14 @@ export default function App() {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               placeholder="e.g. A 45-second explainer on why Filipinos love ube" aria-label="Describe your video" />
             <div className="hero-opts">
+              <select value={content} onChange={(e) => setContent(e.target.value)} aria-label="Content style"
+                title={contentStyles.find((c) => c.id === content)?.description ?? 'The AI picks the format that fits your prompt'}>
+                <option value="auto">Auto format (AI picks)</option>
+                {contentStyles.filter((c) => !c.custom).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {contentStyles.some((c) => c.custom) && <optgroup label="Your styles">
+                  {contentStyles.filter((c) => c.custom).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </optgroup>}
+              </select>
               <select value={style} onChange={(e) => setStyle(e.target.value as Style | 'auto')} aria-label="Visual style">
                 <option value="auto">Auto style (AI picks)</option>
                 {(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}
