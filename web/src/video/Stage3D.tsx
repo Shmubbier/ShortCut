@@ -93,7 +93,9 @@ const PolyforkStage = ({ model }: { model: { url: string } }) => {
   const [loaded, setLoaded] = useState<THREE.Group>()
   useEffect(() => {
     new GLTFLoader().load(model.url.startsWith('/') ? staticFile(model.url.slice(1)) : model.url, (gltf) => {
-      const root = gltf.scene.clone(true)
+      // Use the loaded scene itself: a plain clone() leaves rigged models (Polyfork animals and characters) bound to the
+      // original, unscaled skeleton, so they drew at real-world size (a 65 cm chicken became a dot). Each stage loads its own copy.
+      const root = gltf.scene
       root.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(root)
       const size = box.getSize(new THREE.Vector3())
