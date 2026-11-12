@@ -866,9 +866,9 @@ def import_asset(body: dict) -> dict:
         try:
             import av
             with av.open(str(path)) as container: duration = round(float(container.duration or 0) / 1_000_000, 2)
-            if not duration or duration > 60:
+            if not duration:
                 path.unlink(missing_ok=True)
-                raise ValueError("Only video clips up to 60 seconds can be imported")
+                raise ValueError("Could not read the video duration")
         except ImportError:
             path.unlink(missing_ok=True)
             raise ValueError("Video duration validation needs PyAV")

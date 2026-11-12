@@ -391,7 +391,9 @@ export default function App() {
       if (item.kind === 'image') setAssets((a) => [...a, item])
       else if (item.kind === 'video') setClips((a) => [...a, item])
       else setModels((a) => [...a, item])
-      setAssetMsg(`Imported ${item.name} · ${item.license || 'licence unknown'}`)
+      setAssetMsg(item.kind === 'video' && item.duration > 60
+        ? `Imported ${item.name} (${item.duration.toFixed(1)}s). Drag it to a segment to use a short slice.`
+        : `Imported ${item.name} · ${item.license || 'licence unknown'}`)
     } catch (e) { setAssetMsg(`Could not import: ${errText(e)}`) }
   }
 

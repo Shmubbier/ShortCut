@@ -32,12 +32,12 @@ def _get(url, cap):
         return data, r.headers.get_content_type()
 
 
-def _candidate(kind, url, preview, title, page, license="", author="", width=None, height=None, duration=None, fmt=""):
+def _candidate(kind, url, preview, title, page, license="", author="", width=None, height=None, duration=None, fmt="", provider="unknown"):
     if not url or not url.startswith("https://"):
         return None
     return {"kind": kind, "url": url, "preview_url": preview or url, "title": str(title or "Untitled")[:180],
             "source_page": page or url, "license": license or "Unknown; check source terms", "author": author or "",
-            "width": width, "height": height, "duration": duration, "format": fmt}
+            "width": width, "height": height, "duration": duration, "format": fmt, "provider": provider}
 
 
 def _commons(q, kind, limit):
@@ -48,10 +48,12 @@ def _commons(q, kind, limit):
     out=[]
     for p in (data.get("query",{}).get("pages",{}) or {}).values():
         info=(p.get("imageinfo") or [{}])[0]; original=info.get("url",""); ext=original.lower().split("?")[0].rsplit(".",1)[-1]
-        if kind == "image" and ext not in ("jpg","jpeg","png","webp") or kind == "video" and ext not in ("mp4","webm","ogv"):
+        if (kind == "image" and ext not in ("jpg","jpeg","png","webp")
+                or kind == "video" and ext not in ("mp4","webm")
+                or kind == "model" and ext != "glb"):
             continue
         m=info.get("extmetadata",{}); val=lambda k: re.sub("<[^>]+>","",(m.get(k) or {}).get("value",""))[:250]
-        c=_candidate(kind, original, info.get("thumburl",original), p.get("title",""), "https://commons.wikimedia.org/wiki/"+urllib.parse.quote(p.get("title","")), val("LicenseShortName"), val("Artist"), info.get("width"), info.get("height"), None, ext)
+        c=_candidate(kind, original, info.get("thumburl",original), p.get("title",""), "https://commons.wikimedia.org/wiki/"+urllib.parse.quote(p.get("title","")), val("LicenseShortName"), val("Artist"), info.get("width"), info.get("height"), None, ext, "Wikimedia Commons")
         if c: out.append(c)
     return out
 
@@ -64,7 +66,7 @@ def _openverse(q, kind, limit):
     for x in data.get("results",[]):
         u=x.get("url",""); typ=(x.get("filetype") or u.rsplit(".",1)[-1]).lower()
         if kind == "video" and typ not in ("mp4","webm"): continue
-        c=_candidate(kind,u,x.get("thumbnail"),x.get("title"),x.get("foreign_landing_url"),x.get("license"),x.get("creator"),x.get("width"),x.get("height"),x.get("duration"),typ)
+        c=_candidate(kind,u,x.get("thumbnail"),x.get("title"),x.get("foreign_landing_url"),x.get("license"),x.get("creator"),x.get("width"),x.get("height"),x.get("duration"),typ,"Openverse")
         if c: out.append(c)
     return out
 
@@ -83,7 +85,7 @@ def _nasa(q, kind, limit):
             except Exception: continue
             preview=u
         else: u=preview
-        c=_candidate(kind,u,preview,d.get("title"),"https://images.nasa.gov/details/"+d.get("nasa_id",""),"Public domain","NASA",None,None,None,"mp4" if kind=="video" else "image")
+        c=_candidate(kind,u,preview,d.get("title"),"https://images.nasa.gov/details/"+d.get("nasa_id",""),"Public domain","NASA",None,None,None,"mp4" if kind=="video" else "image","NASA")
         if c: out.append(c)
     return out
 
@@ -91,8 +93,8 @@ def _nasa(q, kind, limit):
 def _ddg(q, limit):
     try:
         from ddgs import DDGS
-        return [_candidate("image",x.get("image"),x.get("image"),x.get("title"),x.get("url"),"Unknown; check source terms",x.get("source"),fmt="image")
-                for x in DDGS().images(q,max_results=limit*2) if x.get("image")]
+        return [c for x in DDGS().images(q,max_results=limit*2) if x.get("image")
+                if (c:=_candidate("image",x.get("image"),x.get("image"),x.get("title"),x.get("url"),"Unknown; check source terms",x.get("source"),fmt="image",provider="DuckDuckGo"))]
     except Exception as e:
         print("asset search ddg:",repr(e)[:180]); return []
 
@@ -101,7 +103,7 @@ def search(query, kinds=("image","video","model"), limit=8):
     """Search independent public sources concurrently; return normalized, un-downloaded candidates."""
     q=" ".join(str(query).split())[:160]
     if not q: raise ValueError("Type a topic to search for assets")
-    limit=max(1,min(int(limit),20)); variants=list(dict.fromkeys([q, q+" objects places", q.split()[0]]))
+    limit=max(1,min(int(limit),20)); variants=list(dict.fromkeys([q, q+" objects places", q.split()[0] if q.split() else q]))
     tasks=[]
     for kind in kinds:
         if kind not in ("image","video","model"): continue
@@ -115,14 +117,23 @@ def search(query, kinds=("image","video","model"), limit=8):
         futures={pool.submit(fn):(kind,src) for kind,src,fn in tasks}
         for f,(kind,src) in futures.items():
             try:
-                rows=f.result(timeout=16); print(f"asset_search {src} [{kind}]: {len(rows)}")
+                rows=f.result(timeout=16); print(f"asset_search {src} [{kind}]: {len(rows)}", flush=True)
                 results.extend(rows)
-            except Exception as e: print(f"asset_search {src} [{kind}] failed: {str(e)[:160]}")
+            except Exception as e: print(f"asset_search {src} [{kind}] failed: {str(e)[:160]}", flush=True)
     # There is no stable public Poly Pizza/Polyfork query API. Never claim a result that cannot be resolved to a direct GLB.
-    unique=[]; seen=set()
+    buckets={}; seen=set()
     for c in results:
         k=(c["kind"],c["url"])
-        if k not in seen: seen.add(k); unique.append(c)
+        if k in seen: continue
+        seen.add(k); buckets.setdefault((c["kind"],c["provider"]),[]).append(c)
+    # Interleave providers so a large Commons catalogue does not crowd all other sources out.
+    unique=[]; counts={}
+    while True:
+        advanced=False
+        for (kind,provider),items in buckets.items():
+            if items and counts.get(kind,0)<limit:
+                unique.append(items.pop(0)); counts[kind]=counts.get(kind,0)+1; advanced=True
+        if not advanced: break
     return unique
 
 
