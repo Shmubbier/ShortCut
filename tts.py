@@ -16,8 +16,9 @@ _proc: subprocess.Popen | None = None
 _proc_model = ""
 _BASE = os.environ.get("BLOCKCUT_SPEECH_URL", "http://127.0.0.1:8795").rstrip("/")
 _MODEL = os.environ.get("BLOCKCUT_QWEN_MODEL", "qwen3-tts-1.7b")
-_WORKTREE_ROOT = Path(__file__).resolve().parent.parent
-_SHARED_ROOT = _WORKTREE_ROOT.parent / "ManilaHack"
+_HERE = Path(__file__).resolve().parent
+# Main checkout has tools/ beside this file; worktrees (ManilaHack-wt/<task>) share the main checkout's.
+_SHARED_ROOT = _HERE if (_HERE / "tools").is_dir() else _HERE.parent.parent / "ManilaHack"
 _EXE = Path(os.environ.get("BLOCKCUT_SPEECH_EXE", _SHARED_ROOT / "tools" / "speechcpp" / "speech.exe"))
 
 
