@@ -279,6 +279,68 @@ def context(plan: dict, full_prop_index=None) -> str:
     return json.dumps({"title": plan["title"], "direction": current, "scenes": scenes}, ensure_ascii=False)
 
 
+class PropFix(BaseModel):
+    index: int  # segment index of the prop being fixed
+    prop_json: str  # the corrected recipe as a JSON string
+
+
+class PropFixes(BaseModel):
+    fixes: list[PropFix]
+
+
+VALIDATOR = ROOT / "web" / "src" / "video" / "bench3d" / "validate.mts"
+
+
+def validate_props(scenes: list) -> list[dict]:
+    """Build every scene's prop with the renderer's own builder (node + Manifold). [{ok, error?, tris?}] per scene."""
+    props = [sc.get("prop") or None for sc in scenes]
+    if not any(props):
+        return [{"ok": True, "skipped": True} for _ in props]
+    try:
+        r = subprocess.run(["node", str(VALIDATOR)], input=json.dumps(props), capture_output=True, text=True,
+                           encoding="utf-8", timeout=90, cwd=str(ROOT / "web"))
+        return json.loads(r.stdout)
+    except Exception as e:  # validator unavailable: don't block the plan, the editor still flags broken props
+        print("prop validation skipped:", repr(e)[:200])
+        return [{"ok": True, "skipped": True} for _ in props]
+
+
+def ensure_props(scenes: list) -> tuple[list, str]:
+    """AI-written 3D props often fail to build (unknown ops, empty booleans). Validate, give the AI one repair pass with
+    the exact errors, re-validate, and drop whatever is still broken so no segment shows an empty 3D stage."""
+    results = validate_props(scenes)
+    bad = [(i, r.get("error", "")) for i, r in enumerate(results) if not r.get("ok")]
+    if not bad:
+        return scenes, ""
+    scenes = [dict(sc) for sc in scenes]
+    fixed = 0
+    try:
+        listing = "\n\n".join(f"Segment {i} ({scenes[i]['prop'].get('name', 'prop')}): ERROR {err}\n{json.dumps(scenes[i]['prop'])}" for i, err in bad)
+        fixes = ask(f"""These low-poly 3D prop recipes failed to build. Fix each one so it builds, keeping the same idea and look.
+Use only the vocabulary below. Return one fix per failing segment index.
+
+{PROP_GUIDE}
+
+FAILING RECIPES:
+{listing}""", PropFixes)
+        for f in fixes.fixes:
+            if any(f.index == i for i, _ in bad):
+                try:
+                    scenes[f.index]["prop"] = json.loads(f.prop_json)
+                except json.JSONDecodeError:
+                    pass
+        recheck = validate_props(scenes)
+        still = {i for i, r in enumerate(recheck) if not r.get("ok")}
+        fixed = len([i for i, _ in bad if i not in still])
+    except Exception as e:
+        print("prop repair failed:", repr(e)[:200])
+        still = {i for i, _ in bad}
+    for i in still:
+        scenes[i]["prop"] = None
+    note = f" 3D props: repaired {fixed} that failed to build" + (f", dropped {len(still)} that couldn't be fixed." if still else ".")
+    return scenes, note
+
+
 def to_scene(s: Scene, old: dict | None = None) -> dict:
     """Claude's segment -> stored segment: stable id, parsed prop, and voice audio kept only if the line didn't change."""
     old = old or {}
@@ -371,8 +433,9 @@ Follow the content style's structure (the hook and payoff take the form it descr
         d = d.model_copy(update={"style": meta["style"]})
     if chosen:
         d = d.model_copy(update={"content_style": chosen["id"]})
-    return {"title": s.title, **meta, **direction_fields(d), "scenes": [to_scene(x) for x in s.scenes],
-            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why})"}
+    scenes, prop_note = ensure_props([to_scene(x) for x in s.scenes])
+    return {"title": s.title, **meta, **direction_fields(d), "scenes": scenes,
+            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why}){prop_note}"}
 
 
 def edit(body: dict) -> dict:
@@ -394,7 +457,8 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
 (for an unchanged 3D prop, return prop_json "keep").""", SceneEdit)
         scenes = [*plan["scenes"]]
         scenes[i] = to_scene(e.scene, scenes[i])
-        return {"plan": {**plan, "scenes": scenes}, "note": e.note}
+        scenes, prop_note = ensure_props(scenes)
+        return {"plan": {**plan, "scenes": scenes}, "note": e.note + prop_note}
     s = ask(f"""Current video plan:
 {context(plan)}
 
@@ -414,7 +478,8 @@ Add, remove or reorder segments only if asked.""", Script)
     old = plan["scenes"]
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
     vol = (plan.get("music") or {}).get("volume", 0.5)
-    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note}
+    scenes, prop_note = ensure_props(scenes)
+    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note + prop_note}
 
 
 SAMPLES = ROOT / "samples"
