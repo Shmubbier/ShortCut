@@ -268,8 +268,8 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
   let bg = t.bg[i % t.bg.length]
   let ink = t.ink[i % t.ink.length]
   if (fx.includes('invert')) [bg, ink] = [ink, bg]
-  const prop = t.style === '3d' && s.prop ? s.prop : null
-  const model = t.style === '3d' && s.model ? s.model : null
+  const prop = s.prop ?? null  // 3D on any segment, in any style: videos can mix models and photos
+  const model = s.model ?? null
   const has3d = !!(prop || model)
   const footage = s.media?.type === 'video' ? s.media : null
   // A 3D prop owns the lower (tall) or right (wide) part of the frame, so the text column narrows and the image cutout steps aside.

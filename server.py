@@ -430,7 +430,11 @@ def wants_custom_model(prompt: str) -> bool:
 
 
 def model_guide(custom: bool) -> str:
-    query = "Return model_query as 2-3 plain catalogue nouns (e.g. fruit basket, bus, windmill), and optionally model_want as plain remix knob words from the chosen palette (e.g. purple, night). Polyfork is tried first."
+    query = ("Pick each segment's visual on its own; MIX 3D models and photos in one video. Give model_query (2-3 plain catalogue nouns, "
+             "e.g. fruit basket, bus, windmill; optional model_want = palette remix words like purple, night) ONLY when the segment's "
+             "subject is a concrete physical object (vehicle, food, building, animal, tool, gadget). For people, real places, landscapes, "
+             "events, maps, documents and evidence, set model_query \"\" and use a bucket image in `asset` instead. "
+             "Aim for roughly half model segments and half photo segments when both fit the topic.")
     return f"{query}\n{PROP_GUIDE}\nOnly provide prop_json as the explicit-consent fallback when the catalogue query has no usable result." if custom else f"{query} Set prop_json to empty. Never write a recipe."
 
 
@@ -440,9 +444,6 @@ def resolve_models(scenes: list, custom: bool, style: str = "3d") -> tuple[list,
     for i, sc in enumerate(out):
         q = str(sc.pop("model_query", "") or "").strip()
         want = str(sc.pop("model_want", "") or "").strip()
-        if not q and style == "3d":
-            q = " ".join(str(sc.get(k, "")) for k in ("title", "headline", "sub")).split(" ")
-            q = " ".join(q[:4])
         if q.lower() == "keep":
             continue
         if q: jobs.append((i, q, want))
