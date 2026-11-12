@@ -83,7 +83,12 @@ export default function App() {
   planRef.current = plan
 
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}) }, [])
-  useEffect(() => { api('/api/styles').then(setContentStyles).catch(() => {}) }, [])
+  useEffect(() => {
+    const refresh = () => { api('/api/styles').then(setContentStyles).catch(() => {}) }
+    refresh()
+    window.addEventListener('blockcut-styles-updated', refresh)
+    return () => window.removeEventListener('blockcut-styles-updated', refresh)
+  }, [])
   useEffect(() => { if (!gen) return; const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [gen])
   useEffect(() => { // autosave (skipped mid-reveal so a refresh can't save a half-shown storyboard)
     if (gen) return

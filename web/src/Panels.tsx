@@ -57,11 +57,43 @@ export function ScriptPanel({ plan, change, sel, onSelect }: Edit & { sel: numbe
 }
 
 export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileProps: (t: Tile) => object }) {
+  const [refUrl, setRefUrl] = useState('')
+  const [refJob, setRefJob] = useState<{ id?: string; status?: string; stage?: string; error?: string; style?: any } | null>(null)
+  useEffect(() => {
+    if (!refJob?.id || !['queued', 'running'].includes(refJob.status ?? '')) return
+    const timer = window.setInterval(async () => {
+      try {
+        const r = await fetch(`/api/styles/jobs/${refJob.id}`)
+        const j = await r.json()
+        setRefJob(j)
+        if (j.status === 'done') window.dispatchEvent(new Event('blockcut-styles-updated'))
+      } catch { /* next poll can recover */ }
+    }, 1200)
+    return () => window.clearInterval(timer)
+  }, [refJob?.id, refJob?.status])
+  const createFromUrl = async () => {
+    setRefJob({ status: 'queued', stage: 'starting' })
+    try {
+      const r = await fetch('/api/styles/from-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: refUrl }) })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Could not start style extraction')
+      setRefJob(j)
+    } catch (e) { setRefJob({ status: 'error', error: e instanceof Error ? e.message : String(e) }) }
+  }
   const t = resolveTheme(plan.style, plan.theme)
   const theme = (k: string, v: unknown) => { snapshot(); change({ ...plan, theme: { ...plan.theme, [k]: v } }) }
   const cap = (k: string, v: string) => { snapshot(); change({ ...plan, captionStyle: { ...plan.captionStyle, [k]: v } }) }
   return (
     <>
+      <h3>Create a style from YouTube</h3>
+      <label>YouTube video link<input type="url" value={refUrl} onChange={(e) => setRefUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" /></label>
+      <button onClick={createFromUrl} disabled={!refUrl || ['queued', 'running'].includes(refJob?.status ?? '')}>
+        {['queued', 'running'].includes(refJob?.status ?? '') ? 'Studying video…' : 'Create reusable style'}
+      </button>
+      {refJob?.stage && <small className="tip">{refJob.stage}</small>}
+      {refJob?.error && <small role="alert" className="tip">{refJob.error}</small>}
+      {refJob?.style && <div className="recs"><b>{refJob.style.label}</b><small>{refJob.style.video_type} · {refJob.style.writing}</small>
+        <small>Cut pace: {refJob.style.measured?.median_shot_seconds}s median · Captions: {refJob.style.editing?.captions} · Palette: {refJob.style.visual?.palette}</small></div>}
       <label>Visual style
         <select value={plan.style} onChange={(e) => { snapshot(); change({ ...plan, style: e.target.value as Style }) }}>
           {(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}

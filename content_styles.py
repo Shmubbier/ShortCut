@@ -96,6 +96,8 @@ def style_brief(style_id: str | None) -> str:
 def _rules(s: dict) -> str:
     e = s.get("editing", {})
     seg = s.get("segments", [6, 8])
+    v = s.get("visual", {})
     return (f"[{s['id']}] {s['label']} ({s.get('video_type', '')}). Structure: {s.get('structure', '')}. Writing: {s.get('writing', '')}. "
-            f"Editing: cuts {e.get('cuts', '')}; transitions {e.get('transitions', '')}; effects {e.get('effects', '')}; captions {e.get('captions', 'on')}. "
+            f"Editing pace {e.get('pace', '')}; cuts {e.get('cuts', '')}; transitions {e.get('transitions', '')}; effects {e.get('effects', '')}; captions {e.get('captions', 'on')}. "
+            f"Visual look {v.get('style', 'choose to suit the content')}; palette {v.get('palette', 'choose to suit the content')}. "
             f"Use {seg[0]}-{seg[1]} segments.")
