@@ -445,24 +445,22 @@ export default function App() {
           <input value={findQuery} onChange={(e) => setFindQuery(e.target.value)} placeholder={plan ? `Search assets: ${plan.title}` : 'Search images, video or 3D'} aria-label="Topic to search for assets" />
           <button type="submit" disabled={!!busy || !(findQuery || plan?.title)}>{busy === 'find' ? 'Searching…' : 'Search'}</button>
         </form>
-        <div className="row asset-kinds">{(['image','video','model'] as const).map((kind) => <label key={kind}><input type="checkbox" checked={searchKinds.includes(kind)} onChange={(e) => setSearchKinds((k) => e.target.checked ? [...k, kind] : k.filter((x) => x !== kind))} /> {kind === 'model' ? '3D' : kind === 'image' ? 'Images' : 'Video'}</label>)}</div>
+        <div className="kind-chips" role="group" aria-label="Search for">{(['image','video','model'] as const).map((kind) => <button key={kind} type="button" aria-pressed={searchKinds.includes(kind)} className={searchKinds.includes(kind) ? 'on' : ''} onClick={() => setSearchKinds((k) => k.includes(kind) ? k.filter((x) => x !== kind) : [...k, kind])}>{kind === 'model' ? '3D' : kind === 'image' ? 'Images' : 'Video'}</button>)}</div>
         <label className="upload">Upload images<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} hidden /></label>
         <form onSubmit={(e) => { e.preventDefault(); scrape() }}>
           <input value={scrapeUrl} onChange={(e) => setScrapeUrl(e.target.value)} placeholder="Paste a page URL to grab its images" aria-label="Page URL to scrape images from" />
           <button type="submit" disabled={!scrapeUrl.trim()}>Grab</button>
         </form>
       </div>
-      {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className={`fx asset${c.kind === 'model' ? ' model-result' : ''}`} title={`${c.title} · ${c.license}`}>
+      {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className="fx asset result" title={`${c.title} · ${c.license}`}>
         {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : c.preview_url && c.preview_url !== c.url ? <img src={c.preview_url} alt="" loading="lazy" className="model-thumb" /> : <div className="model-preview"><svg className="model-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7z M3 7l9 5 9-5 M12 12v10" /></svg></div>}
-        {c.kind === 'model' ? <button className="import-icon" onClick={() => importMedia(c)} aria-label={`Import ${c.title}`}>+</button>
-          : <><span title={`${c.title} · ${c.author} · ${c.source_page}`}>{c.title}</span><small>{c.license}</small><button onClick={() => importMedia(c)}>Import</button></>}
+        <button className="import-icon" onClick={() => importMedia(c)} aria-label={`Import ${c.title}`}>+</button>
       </article>)}</div>}
       <div className="grid assets" onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}>
         {assets.map((a) => (
           <div key={a.url} className="fx asset" {...tileProps({ type: 'asset', url: a.url, name: a.name })}>
-            <img src={a.url} alt={a.name} title={a.source ? `From ${a.source}` : a.name} />
-            <span>{a.name}{a.license ? ` · ${a.license}` : ''}</span>
+            <img src={a.url} alt={a.name} title={[a.name, a.license, a.source && `From ${a.source}`].filter(Boolean).join(' · ')} />
             <button className="x del" onClick={(e) => { e.stopPropagation(); removeAsset(a.url) }} aria-label={`Delete ${a.name}`}>×</button>
           </div>
         ))}

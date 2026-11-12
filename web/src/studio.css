@@ -207,5 +207,18 @@
 /* 3D models: thumbnail only (name on hover); no thumbnail -> cube icon; search results import with a + */
 .model-tile { padding: 4px; }
 .model-preview .model-icon { width: 40%; height: 40%; fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; }
-.fx.asset.model-result { position: relative; }
+.fx.asset.result { position: relative; }
 .import-icon { position: absolute; right: 8px; bottom: 8px; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 18px; line-height: 1; padding: 0; }
+
+/* Final UI pass: panel sections keep their height (the image grid no longer collapses into a cropped strip) */
+.flyout-body > * { flex-shrink: 0; }
+.kind-chips { display: flex; gap: 6px; }
+.kind-chips button { flex: 1; border: 1.5px solid var(--ink); border-radius: 99px; background: var(--paper); padding: 5px 0; font-weight: 700; font-size: 12px; color: var(--muted); }
+.kind-chips button.on { background: var(--ink); color: var(--paper); }
+.flyout.wide .grid.assets .fx.asset { padding: 4px; gap: 0; }
+/* Timeline insert: solid circle that covers the transition line, plus drawn in CSS so it is exactly centred */
+.insert { top: -12px; width: 24px; height: 24px; opacity: 1; font-size: 0; color: var(--muted); border-color: var(--muted);
+  background: linear-gradient(currentColor, currentColor) center / 10px 2px no-repeat, linear-gradient(currentColor, currentColor) center / 2px 10px no-repeat, var(--paper); }
+.wire:hover .insert, .insert:focus-visible { color: var(--ink); border-color: var(--ink); }
+.insert:hover { color: #fff; border-color: var(--accent); background-color: var(--accent); }
+.insert.end { width: 28px; height: 28px; opacity: 1; }
