@@ -46,7 +46,9 @@ def _analyse(path: Path, duration: float, contact_sheet: Path):
                 continue
             rgb = frame.to_ndarray(format="rgb24")
             small = rgb[::8, ::8]
-            hist = np.histogramdd(small.reshape(-1,3), bins=(8,8,8), range=((0,256),)*3, density=True)[0]
+            # Fractions summing to 1 (density=True divides by bin volume, which made every diff ~0 and hid all cuts).
+            hist = np.histogramdd(small.reshape(-1,3), bins=(8,8,8), range=((0,256),)*3)[0]
+            hist /= hist.sum()
             thumb = rgb[::max(1,rgb.shape[0]//72), ::max(1,rgb.shape[1]//72)]
             samples.append((sec, thumb, np.quantile(thumb.reshape(-1,3), [.2,.5,.8], axis=0).round().astype(int).tolist()))
             if prev and np.abs(hist-prev[1]).sum() > .72:
@@ -67,7 +69,10 @@ def _analyse(path: Path, duration: float, contact_sheet: Path):
             sheet[(i//4)*h:(i//4+1)*h,(i%4)*w:(i%4+1)*w]=thumb
         with av.open(str(contact_sheet),"w",format="image2") as out:
             frame=av.VideoFrame.from_ndarray(sheet,format="rgb24")
-            stream=out.add_stream("png")
+            stream=out.add_stream("png",rate=1)
+            stream.width=sheet.shape[1]
+            stream.height=sheet.shape[0]
+            stream.pix_fmt="rgb24"
             for packet in stream.encode(frame): out.mux(packet)
             for packet in stream.encode(): out.mux(packet)
     pixels=np.concatenate([x[1].reshape(-1,3) for x in keyframes]).astype(float) if keyframes else np.empty((0,3))
@@ -103,7 +108,11 @@ def extract(url: str, ask, progress=None):
         opts={"quiet":True,"no_warnings":True,"noplaylist":True,"skip_download":True,"writesubtitles":True,
               "writeautomaticsub":True,"subtitleslangs":["en.*","fil.*","tl.*"],"subtitlesformat":"vtt",
               "outtmpl":str(Path(td)/"ref.%(ext)s")}
-        with yt_dlp.YoutubeDL(opts) as ydl: ydl.download([url])
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl: ydl.download([url])
+        except Exception:
+            # Caption access is frequently rate-limited; the transcript API/description fallback still applies.
+            pass
         for f in Path(td).glob("*.vtt"):
             for line in f.read_text(encoding="utf-8",errors="ignore").splitlines():
                 if line.strip() and "-->" not in line and not line.startswith(("WEBVTT","Kind:","Language:")):
@@ -111,11 +120,12 @@ def extract(url: str, ask, progress=None):
                     if text and (not subs or subs[-1] != text): subs.append(text)
         if progress: progress(25,"downloading low-resolution reference")
         # Prefer 360p or lower; cap filesize as an additional safeguard.
-        opts={"quiet":True,"no_warnings":True,"noplaylist":True,"format":"best[height<=360][ext=mp4]/best[height<=360]/worst",
-              "max_filesize":100_000_000,"outtmpl":str(Path(td)/"video.%(ext)s"),"overwrites":True}
+        opts={"quiet":True,"no_warnings":True,"noplaylist":True,"format":"best[height<=360][ext=mp4]/best[height<=360]",
+              "js_runtimes":{"node":{}},"max_filesize":100_000_000,
+              "outtmpl":str(Path(td)/"video.%(ext)s"),"overwrites":True}
         with yt_dlp.YoutubeDL(opts) as ydl: ydl.download([url])
         files=list(Path(td).glob("video.*"))
-        if not files: raise ValueError("YouTube did not provide a downloadable low-resolution video")
+        if not files: raise ValueError("YouTube did not provide a downloadable video at 360p or lower")
         if progress: progress(65,"measuring cuts, keyframes and colours")
         measured=_analyse(files[0],duration,Path(td)/"contact-sheet.png")
         transcript=" ".join(subs)[:10000]
