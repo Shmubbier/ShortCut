@@ -616,7 +616,7 @@ def voice(body: dict) -> dict:
         else:
             duration = round(path.stat().st_size * 8 / 48_000, 2)
         scenes[k] = {**scenes[k], "audio": {"url": url, "duration": duration}, "words": words, "captionSource": source}
-    return {"plan": {**plan, "scenes": scenes}}
+    return {"plan": {**plan, "voice": v, "scenes": scenes}}
 
 
 # ---------- Asset bucket: files live in web/public/assets so Vite serves them at /assets/<file> ----------

@@ -10,7 +10,7 @@ Codex tasks run headless via `briefs/run_codex.sh <task> <api_port> <ui_port>`, 
 
 | Task | Owner | Branch | Status |
 |---|---|---|---|
-| Natural voices: speech.cpp + Qwen3-TTS, delivery notes, optional Scribe v2 | Codex | `codex/voice` | running |
+| Natural voices: speech.cpp + Qwen3-TTS, delivery notes, optional Scribe v2 | Codex | `codex/voice` | done (see `briefs/voice.report.md`) |
 | Asset search: images, video clips, 3D models, with licences | Codex | `codex/assets` | running |
 | YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | running |
 | Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | running |
@@ -34,7 +34,7 @@ so Filipino voices stay on Edge TTS.
 | Theme: 7 palettes, accent, fonts, grain | `theme.ts`, `Inspector.tsx` | Yes |
 | Aspect ratios 9:16 / 4:5 / 1:1 / 16:9 | `Video.tsx` | Yes |
 | Asset bucket: upload, grab from URL, **ScrapeGraphAI topic image search** (auto before Generate, per segment) | `server.py` `find_images` | 6 ube / 3 jeepney images |
-| Voiceover (Edge TTS, PH + Filipino voices) + **Whisper word captions** | `server.py` `voice` | English and Filipino |
+| Voiceover (Edge TTS, PH + Filipino voices; Qwen3-TTS 0.6B / 1.7B) + **Whisper word captions** (optional Scribe v2) | `server.py` `voice`, `tts.py` | 7-scene Qwen API run; Filipino Edge path; timings in `briefs/voice.report.md` |
 | **Importance** (Quick/Normal/Key) + timing meter on cards | `Video.tsx` `timing`, `Canvas.tsx` | Yes |
 | **Exact segment length** slider (1-20 s), voice-cut warning with fixes | `Inspector.tsx` `SegmentPanel` | Yes (slider, meter, warning and fix) |
 | **Music:** 8 original synthesised loops, AI pick + recommendations, volume, ducking under voice | `music.py`, `Video.tsx` `Music` | Panel and chips checked; **nobody has listened to the tracks yet** |
@@ -57,6 +57,7 @@ so Filipino voices stay on Edge TTS.
   The portrait 2D check exposed overflowing headlines; wrapping was fixed and the 9:16 frame re-rendered. These were single
   scene smoke renders, not a full multi-scene or live-browser QA pass. 3D logs include non-blocking Three.js deprecation
   warnings.
+- **Natural voiceover (Codex branch `codex/voice`):** speech.cpp v0.10.1 plus Qwen3-TTS 0.6B/1.7B installed; a seven-scene `/api/voice` run returned Whisper word timings, and Filipino remained on Edge TTS. See `briefs/voice.report.md` for measurements and samples. Scribe v2 is optional and untested because no key is configured.
 
 ## The new spec (Nov 12): "AI-powered video storyboard and editing application"
 
@@ -150,8 +151,8 @@ assignment, render a valid final video, and recover gracefully from unavailable 
 known limitations here rather than claiming unverified capabilities.
 
 **Current follow-up:** Phase 4 code is implemented but still needs a real 20-60 s clip run through upload → transcription →
-storyboard → preview → export. This checkout has no `.venv` or local Whisper model, so that integration path could not be
-exercised here. Phase 5 still needs measured prompt/revision latency work, prepared offline demo projects, and broader
+storyboard → preview → export. The shared Whisper base model is now installed in the main checkout's ignored `models/` folder,
+but the footage workflow itself has not been exercised here. Phase 5 still needs measured prompt/revision latency work, prepared offline demo projects, and broader
 source-aware discovery for usable video and 3D model assets. Current search/import supports images; reference-video style
 extraction remains deferred.
 

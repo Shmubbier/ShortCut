@@ -16,32 +16,39 @@ _proc: subprocess.Popen | None = None
 _proc_model = ""
 _BASE = os.environ.get("BLOCKCUT_SPEECH_URL", "http://127.0.0.1:8792").rstrip("/")
 _MODEL = os.environ.get("BLOCKCUT_QWEN_MODEL", "qwen3-tts-0.6b")
-_EXE = Path(__file__).resolve().parent.parent / "tools" / "speechcpp" / "speech.exe"
+_WORKTREE_ROOT = Path(__file__).resolve().parent.parent
+_SHARED_ROOT = _WORKTREE_ROOT.parent / "ManilaHack"
+_EXE = Path(os.environ.get("BLOCKCUT_SPEECH_EXE", _SHARED_ROOT / "tools" / "speechcpp" / "speech.exe"))
 
 
 def engine_status() -> dict:
     """Report engines the UI can actually use; starts no model as a side effect."""
     exe = str(_EXE) if _EXE.is_file() else shutil.which("speech")
+    size = "1.7B" if _MODEL.endswith("1.7b") else "0.6B"
+    cache = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "speech.cpp" / "models"
+    cached = any(cache.rglob(f"Qwen3-TTS-12Hz-{size}-CustomVoice*.gguf")) if cache.exists() else False
     try:
-        req = urllib.request.Request(f"{_BASE}/v1/models", timeout=1)
-        data = json.load(urllib.request.urlopen(req))
+        req = urllib.request.Request(f"{_BASE}/v1/models")
+        data = json.load(urllib.request.urlopen(req, timeout=3))
         models = data.get("data", [])
-        ready = any("qwen3-tts" in m.get("id", "") for m in models)
-        return {"edge": True, "qwen": bool(exe) or ready, "qwenReady": ready,
-                "qwenModel": next((m["id"] for m in models if "qwen3-tts" in m.get("id", "")), None)}
+        qwen_models = [m.get("id", "") for m in models if "qwen3-tts" in m.get("id", "").lower()]
+        ready = bool(qwen_models)
+        matching = any(_MODEL.rsplit("-", 1)[-1].lower() in model.lower() for model in qwen_models)
+        return {"edge": True, "qwen": (bool(exe) and cached) or ready, "qwenReady": ready,
+                "qwenModel": _MODEL if matching else (qwen_models[0] if qwen_models else None)}
     except Exception:
-        return {"edge": True, "qwen": bool(exe), "qwenReady": False, "qwenModel": _MODEL if exe else None}
+        return {"edge": True, "qwen": bool(exe) and cached, "qwenReady": False, "qwenModel": None}
 
 
 def _ensure_server() -> None:
     global _proc, _proc_model
     status = engine_status()
-    if status["qwen"] and status["qwenModel"] == _MODEL:
+    if status["qwenReady"] and status["qwenModel"] == _MODEL:
         return
     if _proc is not None and _proc.poll() is None:
         if _proc_model == _MODEL:
             for _ in range(180):
-                if engine_status()["qwen"]:
+                if engine_status()["qwenReady"]:
                     return
                 if _proc.poll() is not None:
                     break
@@ -52,15 +59,26 @@ def _ensure_server() -> None:
     exe = str(_EXE) if _EXE.is_file() else shutil.which("speech")
     if not exe:
         raise RuntimeError(f"speech.cpp executable not found: {_EXE}")
+    device = os.environ.get("BLOCKCUT_QWEN_DEVICE", "")
+    if not device:
+        try:
+            devices = subprocess.run([exe, "devices"], capture_output=True, text=True, timeout=8).stdout
+            device = next((line.split()[0] for line in devices.splitlines()
+                           if line.startswith("Vulkan") and "NVIDIA" in line), "")
+        except Exception:
+            pass
     _proc_model = _MODEL
-    _proc = subprocess.Popen([exe, "serve", _MODEL, "--host", "127.0.0.1", "--port", _BASE.rsplit(":", 1)[-1]],
+    command = [exe, "serve", _MODEL, "--host", "127.0.0.1", "--port", _BASE.rsplit(":", 1)[-1]]
+    if device:
+        command.extend(["--device", device])
+    _proc = subprocess.Popen(command,
                              cwd=str(_EXE.parent if _EXE.is_file() else Path(exe).parent),
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     for _ in range(180):
         if _proc.poll() is not None:
             raise RuntimeError("speech.cpp exited while loading the Qwen model")
-        if engine_status()["qwen"]:
+        if engine_status()["qwenReady"]:
             return
         time.sleep(1)
     raise RuntimeError("speech.cpp model startup timed out")
