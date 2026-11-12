@@ -16,10 +16,10 @@ export const ROLES: Record<Role, string> = { footage: 'Video footage', image: 'I
 // trimStart/trimEnd are seconds into the source clip (footage workflow, spec §11).
 export type Media = { type: 'video' | 'image'; url: string; name?: string; trimStart?: number; trimEnd?: number; duration?: number }
 // An empty segment is one the user inserted and hasn't filled yet (spec §9): no text, voice, media or prop.
-export const isEmpty = (s: SceneData) => !s.headline?.trim() && !s.voiceover?.trim() && !s.asset && !s.media && !s.prop
+export const isEmpty = (s: SceneData) => !s.headline?.trim() && !s.voiceover?.trim() && !s.asset && !s.media && !s.prop && !s.model
 export type SceneData = {
   id: string; kind: Kind; headline: string; sub: string; value: string; transition: Transition; effects: Effect[]
-  asset?: string; prop?: Recipe | null; role?: Role; media?: Media | null; title?: string
+  asset?: string; prop?: Recipe | null; model?: { url: string; id?: string; title?: string; source?: string; license?: string; credit?: string } | null; role?: Role; media?: Media | null; title?: string
   purpose?: string; voiceover?: string; delivery?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts' | 'scribe_v2'
 }
 export type Plan = {
@@ -73,7 +73,7 @@ export const timing = (s: SceneData, pace: Plan['pace']) => {
     return { frames: Math.max(45, voice + OVERLAP + imp.hold), source: 'voice' as const, voice, hold: imp.hold, cutsVoice: false }
   }
   const words = `${s.headline} ${s.sub}`.split(/\s+/).length
-  const base = PACE[pace].base + words * PACE[pace].perWord + (s.kind === 'stat' ? 20 : 0) + (s.effects?.includes('typewriter') ? 15 : 0) + (s.prop ? 30 : 0)
+  const base = PACE[pace].base + words * PACE[pace].perWord + (s.kind === 'stat' ? 20 : 0) + (s.effects?.includes('typewriter') ? 15 : 0) + (s.prop || s.model ? 30 : 0)
   return { frames: Math.round(base * imp.scale), source: 'script' as const, words, voice: 0, hold: 0, cutsVoice: false }
 }
 export const sceneLen = (s: SceneData, pace: Plan['pace']) => timing(s, pace).frames
@@ -269,6 +269,8 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
   let ink = t.ink[i % t.ink.length]
   if (fx.includes('invert')) [bg, ink] = [ink, bg]
   const prop = t.style === '3d' && s.prop ? s.prop : null
+  const model = t.style === '3d' && s.model ? s.model : null
+  const has3d = !!(prop || model)
   const footage = s.media?.type === 'video' ? s.media : null
   // A 3D prop owns the lower (tall) or right (wide) part of the frame, so the text column narrows and the image cutout steps aside.
   const pad = tall ? `${height * 0.1}px ${width * 0.08}px` : `0 ${width * 0.08}px`
@@ -279,18 +281,18 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
         style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />}
       {footage && <AbsoluteFill style={{ background: 'rgba(0,0,0,.22)' }} />}
       {t.style === '2d' && <Shapes2D t={t} i={i} />}
-      {prop && <Stage3D recipe={prop} len={len} i={i} />}
+      {(prop || model) && <Stage3D recipe={prop ?? undefined} model={model ?? undefined} len={len} i={i} />}
       <AbsoluteFill style={{
         padding: pad, gap: 70,
         flexDirection: tall ? 'column' : 'row', alignItems: tall ? 'stretch' : 'center',
-        justifyContent: prop ? (tall ? 'flex-start' : 'flex-start') : 'center',
+        justifyContent: has3d ? 'flex-start' : 'center',
         transform: `scale(${drift}) rotate(${rot}deg)`,
       }}>
-        {s.asset && tall && !prop && <Cutout src={s.asset} t={t} i={i} tall />}
-        <div style={{ flex: tall ? '0 1 auto' : prop ? '0 1 50%' : 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: !tall && prop ? '100%' : undefined, zoom: prop ? 0.68 : 1 }}>
+        {s.asset && tall && !has3d && <Cutout src={s.asset} t={t} i={i} tall />}
+        <div style={{ flex: tall ? '0 1 auto' : has3d ? '0 1 50%' : 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', height: !tall && has3d ? '100%' : undefined, zoom: has3d ? 0.68 : 1 }}>
           <SceneBody s={s} t={t} ink={ink} />
         </div>
-        {s.asset && !tall && !prop && <Cutout src={s.asset} t={t} i={i} tall={false} />}
+        {s.asset && !tall && !has3d && <Cutout src={s.asset} t={t} i={i} tall={false} />}
       </AbsoluteFill>
       {fx.includes('vignette') && <AbsoluteFill style={{ background: 'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%)' }} />}
       {flash > 0 && <AbsoluteFill style={{ background: '#fff', opacity: flash }} />}

@@ -119,6 +119,7 @@ function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findIma
           try {
             const it = JSON.parse(e.dataTransfer.getData('text/plain'))
             if (it.type === 'asset') { snapshot(); set({ asset: it.url }) }
+            if (it.type === 'model') { snapshot(); set({ model: { url: it.url, title: it.name, license: it.license, source: it.source }, prop: null }) }
             if (it.type === 'clip') clipFor(i, it)
           } catch { /* not a library tile */ }
         }}>
@@ -205,7 +206,9 @@ function SegmentPanel({ plan, i, change, snapshot, voice, busy, fixProp, findIma
       {plan.style === '3d' && (
         <>
           <h3>3D prop</h3>
-          {s.prop ? (
+          {s.model ? (
+            <><p className="tip">{s.model.title ?? 'Polyfork model'} · Credit: {s.model.credit ?? 'Polyfork'} · {s.model.license ?? 'licence in source'}</p>{s.model.source && <a href={s.model.source} target="_blank" rel="noreferrer">Source and licence</a>}<button className="link" onClick={() => { snapshot(); set({ model: null }) }}>Remove model</button></>
+          ) : s.prop ? (
             <>
               <p className="tip">{s.prop.name}{s.prop.credit ? ` · ${s.prop.credit}` : ''}</p>
               {propErr && <><p className="err">Couldn't build: {propErr}</p><button onClick={() => fixProp(i, propErr)} disabled={!!busy}>Fix with AI</button></>}

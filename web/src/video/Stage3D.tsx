@@ -1,10 +1,10 @@
-// 3D style: a low-poly prop built live from a Claude-written recipe (vocabulary: bench3d/modelgen/VOCAB.md),
-// on a shadow-only floor so the segment's paper colour shows through. Camera auto-frames whatever was built.
-import { useThree } from '@react-three/fiber'
+// 3D style: Polyfork GLBs or validated fallback recipes render on a shadow-only floor with an auto-fitted camera.
+import { useFrame, useThree } from '@react-three/fiber'
 import { ThreeCanvas } from '@remotion/three'
 import { useEffect, useMemo, useState } from 'react'
 import { continueRender, delayRender, Easing, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import groundStrip from '../../../bench3d/modelgen/props/ground_strip.json'
 import { loadManifold } from './bench3d/manifoldModel'
 import { buildRecipe, jointPose, recipeMaterials, type Piece, type Recipe } from './bench3d/recipe'
@@ -74,7 +74,51 @@ const Rig = ({ center, size, follow, len, i }: { center: THREE.Vector3; size: nu
   return null
 }
 
-export const Stage3D = ({ recipe, len, i }: { recipe: Recipe; len: number; i: number }) => {
+const PolyforkCamera = () => {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const frame = useCurrentFrame()
+  const { width, height } = useVideoConfig()
+  useFrame(() => {
+    camera.position.set(5.8 * Math.sin(frame / 90), 2.6, 8.5 * Math.cos(frame / 90))
+    camera.lookAt(0, 1.25, 0)
+    camera.aspect = width / height
+    camera.updateProjectionMatrix()
+  })
+  return null
+}
+
+const PolyforkStage = ({ model }: { model: { url: string } }) => {
+  const { width, height } = useVideoConfig()
+  const [handle] = useState(() => delayRender('loading Polyfork GLB'))
+  const [loaded, setLoaded] = useState<THREE.Group>()
+  useEffect(() => {
+    new GLTFLoader().load(model.url.startsWith('/') ? staticFile(model.url.slice(1)) : model.url, (gltf) => {
+      const root = gltf.scene.clone(true)
+      root.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(root)
+      const size = box.getSize(new THREE.Vector3())
+      const center = box.getCenter(new THREE.Vector3())
+      const scale = 2.6 / Math.max(size.x, size.y, size.z, 0.001)
+      root.scale.multiplyScalar(scale)
+      root.position.set(-center.x * scale, -center.y * scale + 1.3, -center.z * scale)
+      root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).castShadow = true; (o as THREE.Mesh).receiveShadow = true } })
+      setLoaded(root)
+      continueRender(handle)
+    }, undefined, (error) => { console.error('Polyfork GLB failed to load', error); continueRender(handle) })
+  }, [handle, model.url])
+  return <ThreeCanvas width={width} height={height} shadows={{ type: THREE.PCFSoftShadowMap }} camera={{ fov: 32 }} gl={{ antialias: true, toneMapping: THREE.NoToneMapping }} style={{ position: 'absolute', inset: 0 }}>
+    <hemisphereLight args={['#fff8ef', '#d9cbb3', 1.4]} />
+    <directionalLight position={[3, 6, 4]} intensity={2.2} castShadow />
+    <PolyforkCamera />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><planeGeometry args={[80, 80]} /><shadowMaterial opacity={0.22} color="#000" transparent /></mesh>
+    {loaded && <primitive object={loaded} rotation={[0, -25 * DEG, 0]} />}
+  </ThreeCanvas>
+}
+
+export const Stage3D = ({ recipe, model, len, i }: { recipe?: Recipe; model?: { url: string }; len: number; i: number }) =>
+  model ? <PolyforkStage key={model.url} model={model} /> : recipe ? <RecipeStage3D recipe={recipe} len={len} i={i} /> : null
+
+const RecipeStage3D = ({ recipe, len, i }: { recipe: Recipe; len: number; i: number }) => {
   const w = useManifold()
   const frame = useCurrentFrame()
   const { fps, width, height } = useVideoConfig()
