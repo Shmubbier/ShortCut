@@ -10,10 +10,10 @@ Codex tasks run headless via `briefs/run_codex.sh <task> <api_port> <ui_port>`, 
 
 | Task | Owner | Branch | Status |
 |---|---|---|---|
-| Natural voices: speech.cpp + Qwen3-TTS, delivery notes, optional Scribe v2 | Codex | `codex/voice` | done (see `briefs/voice.report.md`) |
-| Asset search: images, video clips, 3D models, with licences | Codex | `codex/assets` | running |
-| YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | running |
-| Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | running |
+| Natural voices: speech.cpp + Qwen3-TTS, delivery notes, optional Scribe v2 | Codex | `codex/voice` | **merged** (d2b3ad1). Default Qwen 1.7B (~2.6 s/line warm, Vulkan), speech server :8795, Filipino stays on Edge. Scribe untested (no key) |
+| Asset search: images, video clips, 3D models, with licences | Codex | `codex/assets` | **merged** (e1bde6f). Commons/Openverse/NASA/DDG; no GLB hits yet; models not assignable to segments; panel not clicked through |
+| YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | **merged** (fc6d044). Director fixed cut detection (was always 0); 3 demo styles in `styles/`. Style-steered generation and panel click-through untested |
+| Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | **merged** (65e388a). Proof gates (overlap, grounding, ΔE, framing) block finals; 3 library shots pass; 1080×1920 30 fps final 107 s; `/api/shots/render` jobs → footage |
 | Content styles (story, listicle, clip, tutorial, showcase, news, comedy, explainer, documentary) | Claude | `main` | done (a0ae38e) |
 | 3D: stronger 3D bias, server-side prop validation + one AI repair pass | Claude | `main` | done (1040909) |
 
