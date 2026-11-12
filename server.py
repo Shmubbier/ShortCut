@@ -1023,5 +1023,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print("Blockcut API on http://localhost:8787")
-    ThreadingHTTPServer(("127.0.0.1", 8787), Handler).serve_forever()
+    port = int(os.environ.get("BLOCKCUT_PORT", "8787"))  # parallel agents test on their own port
+    print(f"Blockcut API on http://localhost:{port}")
+    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

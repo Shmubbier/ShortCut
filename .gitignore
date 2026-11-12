@@ -26,3 +26,9 @@ web/public/assets/
 
 # generated music loops (music.py renders them on API start)
 web/public/music/
+
+# director/agent work products (large or regenerable)
+tools/
+briefs/voice-samples/
+shots/out/
+web/public/models3d/
