@@ -34,3 +34,6 @@ shots/out/
 web/public/models3d/
 .cache/polyfork/
 styles/*.json
+
+# agent run logs (local only)
+briefs/logs/
