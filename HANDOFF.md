@@ -14,12 +14,21 @@ Codex tasks run headless via `briefs/run_codex.sh <task> <api_port> <ui_port>`, 
 | Asset search: images, video clips, 3D models, with licences | Codex | `codex/assets` | **merged** (e1bde6f). Commons/Openverse/NASA/DDG; no GLB hits yet; models not assignable to segments; panel not clicked through |
 | YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | **merged** (fc6d044). Director fixed cut detection (was always 0); 3 demo styles in `styles/`. Style-steered generation and panel click-through untested |
 | Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | **merged** (65e388a). Proof gates (overlap, grounding, ΔE, framing) block finals; 3 library shots pass; 1080×1920 30 fps final 107 s; `/api/shots/render` jobs → footage |
+| Codex CLI fallback for Claude limits/failures | Claude | `main` | **committed** (6626b89); forced live test passed from `codex/polyfork` after a schema-title fix. Use `BLOCKCUT_AI=codex` to rehearse without Claude. |
+| Polyfork-first 3D model chain | Codex | `codex/polyfork` | Implemented (ea3003b); merged Codex fallback (b3acf7d), strict schema fix and forced Codex plan/edit/render verified. See `briefs/polyfork.report.md`; still needs director review/merge. |
 | Content styles (story, listicle, clip, tutorial, showcase, news, comedy, explainer, documentary) | Claude | `main` | done (a0ae38e) |
 | 3D: stronger 3D bias, server-side prop validation + one AI repair pass | Claude | `main` | done (1040909) |
 
 Research notes: "reanimate" is a Haskell SVG library, so Blender's Python API is used for scripted 3D shots. Remotion is the
 bundled After Effects replacement. Scribe v2 is a paid ElevenLabs API (optional, key-gated). speech.cpp's Qwen3-TTS has no Filipino,
 so Filipino voices stay on Edge TTS.
+
+### Follow-up study: Hyperframes and the video-rendering workflow
+
+The HyperFrames official-source review is recorded in `briefs/hyperframes-study.report.md`. It confirms HTML-native deterministic
+rendering, seekable Three.js adapters, agent skills and an explicit Remotion migration workflow, but does not establish parity with
+Blockcut's editor or GLB pipeline. Keep Remotion in production. Next, run the isolated same-Plan parity POC in
+`briefs/hyperframes-study.md`, measure both routes, and make the replace/complement/retain recommendation before any renderer change.
 
 ## Working today (all on `main`, verified in the browser or with real generations)
 

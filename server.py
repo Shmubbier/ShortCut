@@ -11,6 +11,7 @@ POST /api/assets/delete {url}
 Scene shape: see web/src/video/Video.tsx (SceneData). Run: .venv/Scripts/python server.py  (port 8787; Vite proxies /api)
 """
 import asyncio
+import concurrent.futures
 import base64
 import hashlib
 import json
@@ -37,6 +38,7 @@ import content_styles as cstyles
 import music
 import asset_search
 import tts
+import polyfork
 
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
@@ -101,6 +103,8 @@ class Scene(BaseModel):
     title: str  # 2-4 word segment name for the storyboard card, e.g. "The hook", "Price shock"
     role: Literal["footage", "image", "narration", "title", "broll"]  # content type; keep in sync with ROLES in Video.tsx
     prop_json: str  # 3D recipe JSON, "" for none, "keep" to leave the current prop unchanged
+    model_query: str = ""
+    model_want: str = ""
 
 
 MUSIC = music.ensure_library()  # renders the original loops on first start (~5 s)
@@ -255,9 +259,10 @@ def codex_bin() -> str | None:
 
 
 def _strict(node):
-    """OpenAI structured outputs need every property required and no extra keys; pydantic defaults are dropped."""
+    """OpenAI structured outputs need every property required and no extra keys; drop schema metadata/defaults, not field names."""
     if isinstance(node, dict):
-        node = {k: _strict(v) for k, v in node.items() if k not in ("default", "title")}
+        node = {k: ({name: _strict(schema) for name, schema in v.items()} if k == "properties" and isinstance(v, dict)
+                    else _strict(v)) for k, v in node.items() if k not in ("default", "title")}
         if node.get("type") == "object" and "properties" in node:
             node["required"] = list(node["properties"])
             node["additionalProperties"] = False
@@ -327,6 +332,8 @@ def context(plan: dict, full_prop_index=None) -> str:
         c = {k: s.get(k) for k in ("kind", "title", "role", "headline", "sub", "value", "transition", "effects", "asset", "purpose", "voiceover", "importance", "length")}
         if s.get("prop"):
             c["prop"] = json.dumps(s["prop"]) if i == full_prop_index else f"<3D prop '{s['prop'].get('name')}'; return \"keep\" to keep it>"
+        if s.get("model"):
+            c["model"] = f"<Polyfork model '{s['model'].get('title')}'; return model_query 'keep' to keep it>"
         scenes.append(c)
     current = {"style": plan.get("style"), "palette": (plan.get("theme") or {}).get("palette"), "music": (plan.get("music") or {}).get("id")}
     return json.dumps({"title": plan["title"], "direction": current, "scenes": scenes}, ensure_ascii=False)
@@ -399,6 +406,10 @@ def to_scene(s: Scene, old: dict | None = None) -> dict:
     old = old or {}
     d = s.model_dump()
     pj = d.pop("prop_json").strip()
+    model_query = d.pop("model_query", "").strip()
+    d.pop("model_want", None)
+    if model_query == "keep":
+        d["model"] = old.get("model")
     if pj == "keep":
         d["prop"] = old.get("prop")
     elif pj:
@@ -414,15 +425,60 @@ def to_scene(s: Scene, old: dict | None = None) -> dict:
             "audio": old.get("audio") if same_line else None, "words": old.get("words", []) if same_line else []}
 
 
-def prop_text(style: str) -> str:
-    return PROP_GUIDE if style == "3d" else "Set `prop_json` to \"\" everywhere (not the 3D style)."
+def wants_custom_model(prompt: str) -> bool:
+    return bool(re.search(r"\b(create|build|make|generate)\b.{0,35}\b(custom\s+)?3d\s+models?\b", prompt, re.I))
+
+
+def model_guide(custom: bool) -> str:
+    query = ("Pick each segment's visual on its own; MIX 3D models and photos in one video. Give model_query (2-3 plain catalogue nouns, "
+             "e.g. fruit basket, bus, windmill; optional model_want = palette remix words like purple, night) ONLY when the segment's "
+             "subject is a concrete physical object (vehicle, food, building, animal, tool, gadget). For people, real places, landscapes, "
+             "events, maps, documents and evidence, set model_query \"\" and use a bucket image in `asset` instead. "
+             "Aim for roughly half model segments and half photo segments when both fit the topic.")
+    return f"{query}\n{PROP_GUIDE}\nOnly provide prop_json as the explicit-consent fallback when the catalogue query has no usable result." if custom else f"{query} Set prop_json to empty. Never write a recipe."
+
+
+def resolve_models(scenes: list, custom: bool, style: str = "3d") -> tuple[list, str]:
+    out = [dict(s) for s in scenes]
+    jobs = []
+    for i, sc in enumerate(out):
+        q = str(sc.pop("model_query", "") or "").strip()
+        want = str(sc.pop("model_want", "") or "").strip()
+        if q.lower() == "keep":
+            continue
+        if q: jobs.append((i, q, want))
+    if not jobs:
+        return ensure_props(out) if custom else (out, "")
+    deadline = time.monotonic() + 20
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(jobs))) as pool:
+        futures = {pool.submit(polyfork.resolve, q, None, want, deadline): (i, q) for i, q, want in jobs}
+        for future in concurrent.futures.as_completed(futures, timeout=21):
+            i, q = futures[future]
+            try: model = future.result()
+            except Exception as e:
+                print("Polyfork lookup failed:", repr(e)[:160]); model = None
+            out[i]["model"] = model
+            if model:
+                out[i]["prop"] = None
+            elif not custom:
+                out[i]["prop"] = None
+            if not model and not custom:
+                try:
+                    images = find_images(q, limit=1)
+                    if images: out[i]["asset"] = images[0]["url"]
+                except Exception as e: print("3D image fallback failed:", repr(e)[:160])
+    if custom:
+        out, recipe_note = ensure_props(out)
+    else:
+        recipe_note = ""
+    return out, f" Polyfork resolved {sum(bool(x.get('model')) for x in out)} models; unmatched segments use image fallback." + recipe_note
 
 
 def style_text(style: str) -> str:
     if style == "auto":
-        return f"{DIRECTION_GUIDE}\nChoose the style yourself.\n{PROP_GUIDE}\nWrite prop_json ONLY if you choose the 3d style; otherwise set it to \"\" everywhere."
+        return f"{DIRECTION_GUIDE}\nChoose the style yourself."
     fixed = f"{DIRECTION_GUIDE}\nThe user chose the {style} style: set direction.style to \"{style}\" (still pick palette and music)."
-    return f"{fixed}\n{PROP_GUIDE}" if style == "3d" else f"{fixed}\nSet `prop_json` to \"\" everywhere (not the 3D style)."
+    return fixed
 
 
 def load_env() -> None:
@@ -460,6 +516,7 @@ def create(body: dict) -> dict:
 
 
 def generate(topic: str, meta: dict, mode: str, body: dict) -> dict:
+    custom = bool(body.get("buildCustomModels")) or wants_custom_model(topic)
     notes = research(topic) if mode == "api" else ""  # the CLI path researches with Claude Code's own web search
     fmt = "vertical short-form reel" if meta["aspect"] in ("9:16", "4:5") else "horizontal video"
     look = "a visual style you choose (see direction below)" if meta["style"] == "auto" else f"the {meta['style']} visual style"
@@ -480,13 +537,14 @@ Research notes (may be empty; prefer concrete facts and numbers from here):
 {EDITING_GUIDE}
 {bucket_text(body.get('assets', []))}
 {style_text(meta['style'])}
+{model_guide(custom)}
 Follow the content style's structure (the hook and payoff take the form it describes). Headlines short. No hashtags, no emojis.""", Script, research=True)
     d = s.direction
     if meta["style"] != "auto":  # respect a style the user picked even if the model drifted
         d = d.model_copy(update={"style": meta["style"]})
     if chosen:
         d = d.model_copy(update={"content_style": chosen["id"]})
-    scenes, prop_note = ensure_props([to_scene(x) for x in s.scenes])
+    scenes, prop_note = resolve_models([to_scene(x) | {"model_query": x.model_query, "model_want": x.model_want} for x in s.scenes], custom, d.style)
     return {"title": s.title, **meta, **direction_fields(d), "scenes": scenes,
             "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why}){prop_note}"}
 
@@ -497,7 +555,8 @@ def edit(body: dict) -> dict:
         raise ValueError("Type what to change")
     if not backend():
         return demo_edit(plan, i, instr)
-    common = f"{EDITING_GUIDE}\n{bucket_text(body.get('assets', []))}\n{prop_text(plan.get('style', 'editorial'))}"
+    custom = bool(body.get("buildCustomModels")) or wants_custom_model(instr)
+    common = f"{EDITING_GUIDE}\n{bucket_text(body.get('assets', []))}\n{model_guide(custom)}"
     if i is not None:
         e = ask(f"""Current video plan (context only):
 {context(plan, full_prop_index=i)}
@@ -509,8 +568,8 @@ The user selected segment {i + 1} ({plan['scenes'][i]['kind']}). Apply this inst
 Return the revised segment. Keep every field the instruction doesn't ask to change exactly as it is
 (for an unchanged 3D prop, return prop_json "keep").""", SceneEdit)
         scenes = [*plan["scenes"]]
-        scenes[i] = to_scene(e.scene, scenes[i])
-        scenes, prop_note = ensure_props(scenes)
+        scenes[i] = to_scene(e.scene, scenes[i]) | {"model_query": e.scene.model_query, "model_want": e.scene.model_want}
+        scenes, prop_note = resolve_models(scenes, custom, plan.get("style", "3d"))
         return {"plan": {**plan, "scenes": scenes}, "note": e.note + prop_note}
     s = ask(f"""Current video plan:
 {context(plan)}
@@ -518,8 +577,7 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
 {EDITING_GUIDE}
 {bucket_text(body.get('assets', []))}
 {DIRECTION_GUIDE}
-{PROP_GUIDE}
-Write prop_json only if direction.style is 3d (otherwise "").
+{model_guide(custom)}
 
 Apply this instruction to the video: "{instr}"
 Leave segments the instruction doesn't concern exactly as they are (prop_json "keep" for unchanged props).
@@ -531,7 +589,7 @@ Add, remove or reorder segments only if asked.""", Script)
     old = plan["scenes"]
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
     vol = (plan.get("music") or {}).get("volume", 0.5)
-    scenes, prop_note = ensure_props(scenes)
+    scenes, prop_note = resolve_models([sc | {"model_query": src.model_query, "model_want": src.model_want} for sc, src in zip(scenes, s.scenes)], custom, s.direction.style)
     return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note + prop_note}
 
 
@@ -1088,13 +1146,13 @@ def create_style_from_url(body: dict) -> dict:
 
 
 def _absolute_media(plan: dict) -> dict:
-    base = "http://127.0.0.1:8787"
+    base = f"http://127.0.0.1:{os.environ.get('BLOCKCUT_PORT', '8787')}"
     def fix(value):
         if isinstance(value, dict):
             return {k: fix(v) for k, v in value.items()}
         if isinstance(value, list):
             return [fix(v) for v in value]
-        if isinstance(value, str) and value.startswith(("/assets/", "/media/", "/music/", "/footage/")):
+        if isinstance(value, str) and value.startswith(("/assets/", "/media/", "/music/", "/footage/", "/models3d/")):
             return base + value
         return value
     return fix(plan)
@@ -1168,7 +1226,8 @@ class Handler(BaseHTTPRequestHandler):
             rows = []
             for p in folder.glob("*.glb") if folder.exists() else []:
                 side = p.with_name(p.name + ".json")
-                rows.append({"url":f"/models3d/{p.name}", **(json.loads(side.read_text(encoding="utf-8")) if side.exists() else {"name":p.name})})
+                meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
+                rows.append({"url": f"/models3d/{p.name}", "name": meta.get("title") or p.name, **meta})
             return self.reply(rows, 200)
         if self.path.startswith("/api/render/"):
             rid = self.path.rsplit("/", 1)[-1]

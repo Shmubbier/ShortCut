@@ -31,3 +31,10 @@ Build:
 
 Your ports: API 8796, UI 5186. Follow briefs/COMMON.md (Done means: tsc, recipe.check, real exercise, briefs/polyfork.report.md, commits).
 Generations draw on the user's Claude plan: at most 3 full plan generations in total.
+
+## Follow-up verification
+
+The first pass is committed as `ea3003b`. After the Codex backend landed on `main` (`6626b89`), that commit was merged into
+this worktree (`b3acf7d`) to rehearse the Polyfork path with Codex forced. The rehearsal exposed and fixed a strict-schema bug
+that removed `title` fields from Codex's output schema. See `briefs/polyfork.report.md` for the forced Codex generation,
+follow-up edit, render and timing results. The shared demo servers stayed untouched; this test used API :8796 and UI :5186.

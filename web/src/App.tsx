@@ -12,7 +12,7 @@ type Asset = { url: string; name: string; source?: string; license?: string; aut
 type AssetCandidate = { kind: 'image' | 'video' | 'model'; url: string; preview_url: string; title: string; source_page: string; license: string; author: string; width?: number; height?: number; duration?: number; format: string }
 type Clip = { url: string; name: string; duration?: number } // uploaded video footage (spec §11)
 type Passage = { start: number; end: number; text: string; words?: { text: string; start: number; end: number }[] }
-type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'clip'; url: string; name: string; duration?: number }
+type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'model'; url: string; name: string; license?: string; source?: string } | { type: 'clip'; url: string; name: string; duration?: number }
 type Msg = { who: 'you' | 'ai'; text: string; scope: string }
 type PanelId = 'assets' | 'script' | 'style' | 'settings'
 // Real generation stages (spec §4A): the bar advances when a stage actually finishes, not on a timer.
@@ -130,6 +130,7 @@ export default function App() {
     if (it.type === 'transition') patchScene(i, (s) => ({ ...s, transition: it.name }))
     if (it.type === 'effect') patchScene(i, (s) => (s.effects.includes(it.name) ? s : { ...s, effects: [...s.effects, it.name] }))
     if (it.type === 'asset') patchScene(i, (s) => ({ ...s, asset: it.url }))
+    if (it.type === 'model') patchScene(i, (s) => ({ ...s, model: { url: it.url, title: it.name, license: it.license, source: it.source }, prop: null }))
     if (it.type === 'clip') patchScene(i, (s) => assignClip(s, it))
     select(i)
   }
@@ -493,7 +494,7 @@ export default function App() {
           </div>
         ))}
       </div>
-      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip"><span>{m.name} · GLB</span><small>{m.license} · {m.source}</small></div>)}</div></>}
+      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip" {...tileProps({ type: 'model', url: m.url, name: m.name, license: m.license, source: m.source })}><span>{m.name} · GLB</span><small>{m.license} · {m.source}</small></div>)}</div></>}
       <p className="tip">Drag an image or clip onto a storyboard card or the inspector's Media box. The same asset can go on several segments.</p>
     </>
   )
