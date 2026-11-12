@@ -1307,6 +1307,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", mimetypes.guess_type(p.name)[0] or "application/octet-stream")
                 self.send_header("Content-Length", str(count))
                 self.send_header("Accept-Ranges", "bytes")
+                # The MP4 renderer runs on localhost:3000 and fetch()es GLBs from here; without this, 3D models were
+                # missing from every export (the live preview is same-origin through the Vite proxy, so it never showed).
+                self.send_header("Access-Control-Allow-Origin", "*")
                 if code == 206:
                     self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
                 self.end_headers()
