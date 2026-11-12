@@ -6,31 +6,31 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/api/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/api/:path*"
     },
     {
       "source": "/assets/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/assets/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/assets/:path*"
     },
     {
       "source": "/media/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/media/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/media/:path*"
     },
     {
       "source": "/music/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/music/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/music/:path*"
     },
     {
       "source": "/footage/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/footage/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/footage/:path*"
     },
     {
       "source": "/models3d/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/models3d/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/models3d/:path*"
     },
     {
       "source": "/renders/:path*",
-      "destination": "https://f49dfc375ded73.lhr.life/renders/:path*"
+      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/renders/:path*"
     }
   ]
 }
