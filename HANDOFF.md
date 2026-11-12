@@ -18,6 +18,13 @@ match the title or Polyfork's `full_matches`; no class-only browsing) and saves 
 No match → a photo. AI-written prop recipes only when the user explicitly asks to "create/build a 3D model". Models render in
 any visual style (`Video.tsx` `Shot`). Self-check: `.venv/Scripts/python polyfork.py`.
 
+**Two instances for the demo (Nov 12 evening):**
+- **Live** (real generation): UI http://127.0.0.1:5187 → API :8797, from `../ManilaHack-wt/polyfork`, `BLOCKCUT_AI=codex`.
+- **Demo** (same UI, instant): UI http://127.0.0.1:5188 → API :8788, from this checkout with `BLOCKCUT_DEMO=1`. The ube prompt or starter
+  returns `samples/ube.ready.json` (pre-built: Codex script, found photos, recorded voice) after a 4 s cooking screen
+  (`BLOCKCUT_DEMO_DELAY`), and image search returns instantly. The ready file is git-ignored (it points at local media).
+  Rebuild it by running the API normally and calling find → plan → voice (the same calls the UI makes).
+
 **Asset library:** 460 px flyout, two 4:3 tiles per row; 3D search = Polyfork with thumbnails; models refresh when the panel opens.
 
 **Open / next:**

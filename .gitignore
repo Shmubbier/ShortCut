@@ -37,3 +37,6 @@ styles/*.json
 
 # agent run logs (local only)
 briefs/logs/
+
+# pre-built demo videos point at local media (web/public), so they stay on the demo machine
+samples/*.ready.json

@@ -209,6 +209,8 @@ def backend() -> str | None:
     """'api' (ANTHROPIC_API_KEY), 'cli' (signed-in Claude Code), 'codex' (Codex CLI fallback), or None for demo mode."""
     global _cli_ok
     load_env()
+    if os.environ.get("BLOCKCUT_DEMO") == "1":  # demo instance: pre-built videos only, no AI calls
+        return None
     if os.environ.get("ANTHROPIC_API_KEY"):
         return "api"
     if time.time() - _cli_ok[0] > 60:  # `auth status` takes ~1 s; re-check at most once a minute
@@ -632,8 +634,12 @@ def find_sample(topic: str) -> dict | None:
         if f.name.endswith(".prop.json"):
             continue
         s = json.loads(f.read_text(encoding="utf-8"))
-        if not any(k in t for k in s.get("keywords", [])):
+        if f.name.endswith(".ready.json") or not any(k in t for k in s.get("keywords", [])):
             continue
+        ready = f.with_name(f.stem + ".ready.json")
+        if ready.exists():  # complete demo video built ahead of time (see HANDOFF: demo instance)
+            time.sleep(float(os.environ.get("BLOCKCUT_DEMO_DELAY", "4")))  # same cooking screen as live, just short
+            return {**json.loads(ready.read_text(encoding="utf-8")), "note": f"Demo: loaded the ready-made “{s['title']}” video."}
         scenes = []
         for sc in s["scenes"]:
             sc = dict(sc)
@@ -955,6 +961,8 @@ def find(body: dict) -> list:
     q = body.get("query", "").strip()
     if not q:
         raise ValueError("Type a topic to search images for")
+    if os.environ.get("BLOCKCUT_DEMO") == "1":
+        return []
     limit = max(1, min(int(body.get("limit", 8)), 12))
     candidates = search_assets({"query": q, "kinds": ["image"], "limit": limit})["candidates"]
     out = []
