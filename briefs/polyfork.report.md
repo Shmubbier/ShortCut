@@ -24,13 +24,37 @@ The fruit plan's first scene was rendered with Remotion to `web/out/polyfork.png
 
 **Latency limitation:** the lookup times above are measured, but I did not record a controlled end-to-end generation baseline against the previous recipe prompt. I therefore cannot claim a measured before/after total-generation speedup. The full plan calls themselves remain dependent on Claude availability.
 
+## Forced Codex live test (after the Codex fallback landed on main)
+
+I merged `main` into `codex/polyfork`, then started the isolated API on port 8796 with `BLOCKCUT_AI=codex`. The shared demo API
+and UIs on 8787, 5173 and 5175 were not restarted or changed.
+
+The first forced request returned the offline Jeepney sample in 38.88 s. The Codex response was rejected because `_strict()`
+was stripping the JSON Schema metadata key `title` even when it was a required property name. I fixed the sanitizer to strip
+metadata from schema nodes while preserving every key inside each `properties` map, restarted the isolated server and retried.
+
+| Operation | Result | Time |
+|---|---|---:|
+| `POST /api/plan`, topic “A woven basket of tropical fruit at a Filipino market”, style 3D, 9:16 | Codex returned a researched seven-scene plan; all seven scenes resolved a Polyfork GLB. The models were Kagaribi Fire Basket (three scenes), Kete Reed Basket, Banana, Fruit tree, and Cordwood Pile. | 47.22 s |
+| `POST /api/edit`, whole-plan request to tighten narration/pacing and keep the scene count/models | Codex returned seven scenes and retained the same seven model assignments. | 29.10 s |
+| Remotion still, first revised-plan scene | GLB loaded and visibly rendered centered in the 3D stage with shadow. `tropical-ride.wav` was absent in this worktree, so I set `music: null` in a render-only props copy. | succeeded |
+| UI/API routing on `:5186` → `:8796` | Vite root returned HTTP 200; `/api/models3d` returned 18 entries through the proxy; the first model URL returned HTTP 200. | succeeded |
+
+This verifies the path when Claude is unavailable: `BLOCKCUT_AI=codex` forced Codex for both initial generation and the follow-up edit,
+and generation used Polyfork lookup. Model search is word matching, so the result list is not always semantically exact: for this
+fruit-market plan, several scenes reused basket/fire-basket assets and one used a cordwood pile. Review the images before showing
+these particular assignments as factual fruit visuals. The seven-segment count and stable model preservation are verified; the
+look remains an editor review decision.
+
 ## Verification
 
 - `cd web && npx tsc -b` — passed with no output.
 - `cd web && node src/video/bench3d/recipe.check.mts` — passed; ended with `recipe.ts OK`.
 - Shared-venv AST parse and `import server` — passed.
+- After merging the Codex fallback: shared-venv AST parse/import — passed; strict Script schema includes root, direction and scene `title` fields.
 - `GET /api/models3d` and `GET /models3d/windmill-3aad49.glb` on port 8796 — metadata returned and GLB returned HTTP 200.
 - Remotion still render — passed after adding the GLB load wait; visual inspection confirmed the banana model.
+- Forced-Codex plan, follow-up edit, GLB still, and isolated UI/API proxy — passed after fixing `_strict()`.
 
 ## Reproduce
 
@@ -38,6 +62,7 @@ From the worktree root in PowerShell:
 
 ```powershell
 $env:BLOCKCUT_PORT='8796'
+$env:BLOCKCUT_AI='codex' # force Codex rather than Claude for the fallback rehearsal
 & 'C:/Users/naomi/Documents/vscode shenanigans/ManilaHack/.venv/Scripts/python' server.py
 ```
 
@@ -59,4 +84,4 @@ npx remotion still src/video/index.tsx Main out/polyfork.png --frame=40 --props=
 - Merge the code commit on `codex/polyfork` into `main` normally. No new package or requirements dependency was added.
 - `web/public/models3d/` and `.cache/polyfork/` are ignored runtime data and are not in the commit. On a fresh checkout, Polyfork assets download on demand; to make the demo independent of network access, copy selected `.glb` and matching `.glb.json` sidecars into that checkout's ignored `web/public/models3d/`.
 - Polyfork's public mesh licence offers CC BY 4.0 with the returned credit line, or Polyfork's licence with no redistribution. Preserve the sidecars and visible credit/source when using the hosted GLBs. The `remix` call is metadata/runtime-param information; the cached GLB remains the returned baked variant where Polyfork supplied one.
-- `briefs/polyfork.md` and `HANDOFF.md` were not edited; the director should update the handoff after integration.
+- `briefs/polyfork.md` and `HANDOFF.md` are updated on this branch with the Codex verification and the queued HyperFrames study.

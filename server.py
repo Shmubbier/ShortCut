@@ -259,9 +259,10 @@ def codex_bin() -> str | None:
 
 
 def _strict(node):
-    """OpenAI structured outputs need every property required and no extra keys; pydantic defaults are dropped."""
+    """OpenAI structured outputs need every property required and no extra keys; drop schema metadata/defaults, not field names."""
     if isinstance(node, dict):
-        node = {k: _strict(v) for k, v in node.items() if k not in ("default", "title")}
+        node = {k: ({name: _strict(schema) for name, schema in v.items()} if k == "properties" and isinstance(v, dict)
+                    else _strict(v)) for k, v in node.items() if k not in ("default", "title")}
         if node.get("type") == "object" and "properties" in node:
             node["required"] = list(node["properties"])
             node["additionalProperties"] = False
