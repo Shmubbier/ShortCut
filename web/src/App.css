@@ -178,3 +178,11 @@ header select, .ghost { border: 1.5px solid var(--ink); background: var(--card);
 .warn { background: #fff1e6; border: 1.5px solid var(--accent); border-radius: 8px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
 .meter.manual .bar { outline: 1.5px dashed var(--ink); outline-offset: 1px; }
 :root[data-theme="dark"] .composer, :root[data-theme="dark"] .composer:focus-within { box-shadow: 0 8px 30px rgba(0, 0, 0, .45); }
+/* Start screen theme selector: one pill, three segments */
+.theme-pill { position: fixed; top: 16px; right: 16px; z-index: 50; display: flex; gap: 2px; padding: 3px; border-radius: 99px;
+  border: 1.5px solid rgba(var(--ink-rgb), .25); background: var(--card); }
+.theme-pill button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; padding: 6px 12px; background: transparent;
+  color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+.theme-pill button:hover { color: var(--ink); }
+.theme-pill button.on { background: var(--ink); color: var(--paper); }
+.theme-pill svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
