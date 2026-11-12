@@ -1,5 +1,5 @@
 import { Player, type PlayerRef } from '@remotion/player'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
 import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
@@ -55,6 +55,55 @@ const STARTERS = [
   { label: 'Listicle', text: '5 Manila street foods you have to try', content: 'listicle' },
   { label: '3D showcase', text: 'How a city bus route works: the depot, the stops and the fare', content: 'showcase', style: '3d' },
 ]
+
+// Theme (mockup branch): light, dark, or follow the system. Sets data-theme on <html>; remembered in this browser.
+type ThemeMode = 'light' | 'dark' | 'system'
+const systemDark = () => { try { return matchMedia('(prefers-color-scheme: dark)').matches } catch { return false } }
+const readMode = (): ThemeMode => { try { const m = localStorage.getItem('shortcut.theme'); return m === 'light' || m === 'dark' ? m : 'system' } catch { return 'system' } }
+const applyMode = (m: ThemeMode) => { document.documentElement.dataset.theme = m === 'system' ? (systemDark() ? 'dark' : 'light') : m }
+applyMode(readMode())
+function useThemeMode() {
+  const [mode, setState] = useState<ThemeMode>(readMode)
+  useEffect(() => {
+    const sync = () => setState(readMode())
+    const mq = matchMedia('(prefers-color-scheme: dark)')
+    const onSystem = () => { if (readMode() === 'system') { applyMode('system'); sync() } } // OS switched while on "System"
+    window.addEventListener('shortcut-theme', sync)
+    mq.addEventListener('change', onSystem)
+    return () => { window.removeEventListener('shortcut-theme', sync); mq.removeEventListener('change', onSystem) }
+  }, [])
+  const setMode = (m: ThemeMode) => {
+    try { localStorage.setItem('shortcut.theme', m) } catch { /* private mode */ }
+    applyMode(m)
+    window.dispatchEvent(new Event('shortcut-theme')) // keeps the pill and the corner button in step
+  }
+  return [mode, setMode] as const
+}
+const SUN = <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+const MOON = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
+const SCREEN = <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
+// Start screen: pill selector, before anything is prompted.
+function ThemePill() {
+  const [mode, setMode] = useThemeMode()
+  const options: [ThemeMode, string, ReactNode][] = [['light', 'Light', SUN], ['dark', 'Dark', MOON], ['system', 'System', SCREEN]]
+  return (
+    <div className="theme-pill" role="radiogroup" aria-label="Theme">
+      {options.map(([m, label, icon]) => (
+        <button key={m} role="radio" aria-checked={mode === m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{icon}{label}</button>
+      ))}
+    </div>
+  )
+}
+// Editor: a quick light/dark flip in the corner.
+function ThemeToggle() {
+  const [, setMode] = useThemeMode()
+  const dark = document.documentElement.dataset.theme === 'dark'
+  return (
+    <button className="theme-toggle" onClick={() => setMode(dark ? 'light' : 'dark')} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'}>
+      {dark ? SUN : MOON}
+    </button>
+  )
+}
 
 const SAVE_KEY = 'blockcut.project.v1' // storage key kept from the old name so saved projects survive
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
@@ -521,6 +570,7 @@ export default function App() {
 
   return (
     <div className={`studio ${started ? 'started' : ''}`}>
+      {started ? <ThemeToggle /> : <ThemePill />}
       {started && (
         <nav className="rail" aria-label="Panels">
           <div className="rail-brand" title="ShortCut"><Logo size={34} /></div>
