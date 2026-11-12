@@ -31,6 +31,7 @@ from typing import Literal
 from urllib.parse import unquote, urljoin, urlparse
 
 from pydantic import BaseModel
+from shots.jobs import create_shot_job, get_shot_job
 
 import content_styles as cstyles
 import music
@@ -1096,7 +1097,8 @@ ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/ass
           "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/search": search_assets,
           "/api/assets/import": import_asset, "/api/assets/delete": delete_asset,
           "/api/footage/upload": upload_footage, "/api/footage/transcribe": transcribe_footage,
-          "/api/footage/storyboard": storyboard_footage, "/api/render": render}
+          "/api/footage/storyboard": storyboard_footage, "/api/render": render,
+          "/api/shots/render": create_shot_job}
 ROUTES["/api/styles/from-url"] = create_style_from_url
 
 
@@ -1124,6 +1126,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/render/"):
             rid = self.path.rsplit("/", 1)[-1]
             return self.reply(RENDER_JOBS.get(rid, {"status": "not_found", "progress": 0}), 200 if rid in RENDER_JOBS else 404)
+        if self.path.startswith("/api/shots/jobs/"):
+            job_id = self.path.rstrip("/").rsplit("/", 1)[-1]
+            job = get_shot_job(job_id)
+            return self.reply(job or {"status": "not_found"}, 200 if job else 404)
         # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
         for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/models3d/", ROOT / "web" / "public" / "models3d"), ("/renders/", RENDERS)):
             if self.path.startswith(prefix):
@@ -1169,12 +1175,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
-        fn = ROUTES.get(self.path)
+        route_path = urlparse(self.path).path
+        fn = ROUTES.get(route_path)
         if not fn:
             return self.send_error(404)
         try:
             length = int(self.headers.get("Content-Length", 0))
-            max_request = MAX_FOOTAGE_BYTES * 4 // 3 + 2_000_000 if self.path == "/api/footage/upload" else 30_000_000
+            max_request = MAX_FOOTAGE_BYTES * 4 // 3 + 2_000_000 if route_path == "/api/footage/upload" else 30_000_000
             if length > max_request:
                 raise ValueError("Request body is too large")
             out, code = fn(json.loads(self.rfile.read(length))), 200

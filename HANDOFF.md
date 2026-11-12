@@ -42,6 +42,23 @@ so Filipino voices stay on Edge TTS.
 
 ## Recently landed
 
+- **Scripted Blender shot pipeline (Codex `codex/shots`):** standalone JSON camera/object specs, proof contact sheets and final
+  EEVEE MP4 rendering. Three prompt/spec examples are in `shots/library/`; measured outputs and limitations are in
+  `briefs/shots.report.md`. Renders are reproducible on the portable Blender install and are git-ignored.
+- **Shot proof gate (round 2, step 1):** `render_shot.py --proof` writes per-frame overlap, grounding, background ΔE and framing checks
+  to `proof.json`; a matching passing proof is required before `--final` unless explicitly forced. The original hero fails overlap,
+  so no final can silently proceed until its spec is corrected.
+- **Shot proof layout fixes (round 2, step 2):** hero-orbit, reveal-rise, and flyby specs now all pass automated proof (34/34, 34/34,
+  90/90 respectively); passing proof sheets replace the initial thumbnails in `shots/library/README.md`. Round counts and measured
+  proof timings are recorded in `briefs/shots.report.md`.
+- **Shot formats (round 2, step 3):** scene runner supports 9:16, 16:9, 1:1 and 4:5 at 30 fps plus half-size draft rendering. All
+  hero aspect proofs and draft MP4s passed metadata checks; the full 1080×1920 hero took 111.44 s end to end. Details in the report.
+- **Shot API (round 2, step 4):** `POST /api/shots/render` starts proof/final work and `GET /api/shots/jobs/<id>` returns its stage,
+  proof/check results and footage URL. Tested at :8793: all 34 checks passed and an H.264 final was served from `/footage/` for
+  segment assignment. Details are in `briefs/shots.report.md`.
+- **Shot follow-up complete (round 2, step 5):** project typecheck, recipe self-check, and shared-venv server import pass. All five
+  requested steps and the aspect-fit follow-up are committed on `codex/shots`; the measured report is `briefs/shots.report.md`.
+
 - Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
 - Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover
   shows the cut-off warning, and "Use the voice's length" sets 10.0 s and clears it.
