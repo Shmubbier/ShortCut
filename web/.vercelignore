@@ -1,0 +1,9 @@
+# Vercel hosts only the built editor. Media is served live by the laptop's API through the tunnel (see vercel.json).
+node_modules
+out
+public/assets
+public/media
+public/music
+public/footage
+public/models3d
+public/renders
