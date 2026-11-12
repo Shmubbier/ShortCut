@@ -202,7 +202,7 @@ _cli_ok: tuple[float, bool] = (0.0, False)
 
 
 def backend() -> str | None:
-    """'api' (ANTHROPIC_API_KEY), 'cli' (signed-in Claude Code), or None for demo mode."""
+    """'api' (ANTHROPIC_API_KEY), 'cli' (signed-in Claude Code), 'codex' (Codex CLI fallback), or None for demo mode."""
     global _cli_ok
     load_env()
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -217,7 +217,9 @@ def backend() -> str | None:
             except Exception as e:
                 print("claude code check failed:", repr(e)[:200])
         _cli_ok = (time.time(), ok)
-    return "cli" if _cli_ok[1] else None
+    if _cli_ok[1] and os.environ.get("BLOCKCUT_AI") != "codex":  # BLOCKCUT_AI=codex forces Codex (testing, or saving Claude usage)
+        return "cli"
+    return "codex" if codex_bin() else None
 
 
 def ask_cli(prompt: str, schema, research: bool):
@@ -243,9 +245,54 @@ def ask_cli(prompt: str, schema, research: bool):
     return schema.model_validate(out) if out is not None else schema.model_validate_json(d.get("result", ""))
 
 
+def codex_bin() -> str | None:
+    """The Codex CLI (BLOCKCUT_CODEX_BIN, `codex` on PATH, or the copy bundled with the Codex desktop app)."""
+    found = os.environ.get("BLOCKCUT_CODEX_BIN") or shutil.which("codex")
+    if found:
+        return found
+    bundled = sorted(Path(os.environ.get("LOCALAPPDATA", "")).glob("OpenAI/Codex/bin/*/codex.exe"), key=lambda p: p.stat().st_mtime)
+    return str(bundled[-1]) if bundled else None
+
+
+def _strict(node):
+    """OpenAI structured outputs need every property required and no extra keys; pydantic defaults are dropped."""
+    if isinstance(node, dict):
+        node = {k: _strict(v) for k, v in node.items() if k not in ("default", "title")}
+        if node.get("type") == "object" and "properties" in node:
+            node["required"] = list(node["properties"])
+            node["additionalProperties"] = False
+        return node
+    return [_strict(x) for x in node] if isinstance(node, list) else node
+
+
+def ask_codex(prompt: str, schema, research: bool):
+    """Fallback when Claude is out (e.g. plan usage limit): same prompt and schema, answered by headless Codex
+    in an empty temp folder, read-only, with live web search only when researching."""
+    with tempfile.TemporaryDirectory() as tmp:
+        sp, out = Path(tmp) / "schema.json", Path(tmp) / "out.json"
+        sp.write_text(json.dumps(_strict(schema.model_json_schema())), encoding="utf-8")
+        args = [codex_bin(), *(["--search"] if research else []), "exec", "--ephemeral", "--skip-git-repo-check",
+                "-s", "read-only", "-c", 'model_reasoning_effort="low"', "-C", tmp, "--output-schema", str(sp), "-o", str(out), "-"]
+        if research:
+            prompt += "\n\nFirst use web search to find current, concrete facts and numbers on the topic, then answer."
+        r = subprocess.run(args, input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=600, cwd=tmp)
+        if not out.is_file() or not out.read_text(encoding="utf-8").strip():
+            raise RuntimeError(f"Codex failed: {(r.stderr or r.stdout)[-300:]}")
+        return schema.model_validate_json(out.read_text(encoding="utf-8"))
+
+
 def ask(prompt: str, schema, research: bool = False):
-    if backend() == "cli":
-        return ask_cli(prompt, schema, research)
+    mode = backend()
+    if mode == "cli":
+        try:
+            return ask_cli(prompt, schema, research)
+        except Exception as e:  # usage limit or CLI failure: Codex answers instead when installed
+            if not codex_bin():
+                raise
+            print("Claude Code failed, using Codex:", repr(e)[:200])
+            mode = "codex"
+    if mode == "codex":
+        return ask_codex(prompt, schema, research)
     import anthropic
 
     # Streamed: 3D recipes make long outputs, and a non-streamed request that long can hit HTTP timeouts.
