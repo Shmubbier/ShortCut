@@ -245,3 +245,8 @@
 .starters button:hover { background: #fffaf2; border-color: var(--ink); }
 .starters b { color: var(--accent); font-weight: 800; margin-right: 4px; }
 .hero.empty .hero-footage { margin-top: 6px; color: var(--muted); font-weight: 600; }
+/* Start screen wordmark above the greeting */
+.brand-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 4px; }
+.wordmark { font-family: "Archivo Black", "Arial Black", sans-serif; font-size: 34px; letter-spacing: -1px; color: var(--ink); }
+.wordmark b { color: var(--accent); font-weight: inherit; }
+.hero.empty .welcome h1 { font-size: 30px; color: var(--muted); }

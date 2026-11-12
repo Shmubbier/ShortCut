@@ -579,8 +579,8 @@ export default function App() {
               </div>
             ) : (
             <>
+            <div className="brand-row"><Logo size={44} /><span className="wordmark">Short<b>Cut</b></span></div>
             <div className="welcome">
-              <Logo size={40} />
               <h1>{greeting()}</h1>
             </div>
             <p className="welcome-sub">What video should we make today? ShortCut researches it, writes the script, builds the storyboard and voices it.</p>
