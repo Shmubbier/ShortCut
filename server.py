@@ -436,7 +436,9 @@ def to_scene(s: Scene, old: dict | None = None) -> dict:
 
 
 def wants_custom_model(prompt: str) -> bool:
-    return bool(re.search(r"\b(create|build|make|generate)\b.{0,35}\b(custom\s+)?3d\s+models?\b", prompt, re.I))
+    """The user asked for a 3D model in words ('add a 3D model of a chicken'). Polyfork is still tried first;
+    this only allows an AI-built model when the catalogue has nothing."""
+    return bool(re.search(r"\b(create|build|make|generate|add|put|use|include|insert|show|want|need)\b.{0,35}\b(custom\s+)?3d\s+(models?|objects?|props?)\b", prompt, re.I))
 
 
 def model_guide(custom: bool) -> str:
@@ -444,7 +446,9 @@ def model_guide(custom: bool) -> str:
              "e.g. bus, windmill, oxygen cylinder, delivery truck; the catalogue matches strictly on that last noun; optional model_want = palette remix words like purple, night) ONLY when the segment's "
              "subject is a concrete physical object (vehicle, food, building, animal, tool, gadget). For people, real places, landscapes, "
              "events, maps, documents and evidence, set model_query \"\" and use a bucket image in `asset` instead. "
-             "Aim for roughly half model segments and half photo segments when both fit the topic.")
+             "Aim for roughly half model segments and half photo segments when both fit the topic. "
+             "Colour, material and look words (golden, wooden, low-poly, cinematic) go in model_want, NEVER in model_query. "
+             "If the user asks for a 3D model of something on a segment, that segment MUST get model_query = that object's plain name (e.g. chicken).")
     return f"{query}\n{PROP_GUIDE}\nOnly provide prop_json as the explicit-consent fallback when the catalogue query has no usable result." if custom else f"{query} Set prop_json to empty. Never write a recipe."
 
 

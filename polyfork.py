@@ -20,14 +20,22 @@ def _get(url: str, timeout: float = 7.0):
         return r.read()
 
 
+# Words that describe the medium, not the object ('low-poly chicken model' is a chicken).
+NOISE = {"low", "poly", "lowpoly", "3d", "model", "mesh", "stylized", "stylised", "cartoon", "simple", "a", "an", "the"}
+
+
 def _terms(text: str) -> list[str]:
     """Lower-case words with a simple plural strip, so 'baskets' matches 'basket'."""
     return [w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w for w in re.findall(r"[a-z0-9]+", text.lower())]
 
 
+def _query_terms(query: str) -> list[str]:
+    return [w for w in _terms(query) if w not in NOISE]
+
+
 def _queries(query: str, cls: str | None):
     """Full phrase, then the head noun alone (the catalogue is a word match). No class-only browsing: too loose."""
-    words = _terms(query)
+    words = _query_terms(query)
     return [(q, cls) for q in dict.fromkeys([" ".join(words), words[-1]] if words else [])]
 
 
@@ -41,15 +49,16 @@ def _head(words: list[str]) -> str:
 def _match(row: dict, query: str) -> int:
     """Strict: the title's main noun must BE the query's main noun ('bus' accepts 'Campus Shuttle Bus', rejects
     'Bus Shelter'). With describing words, one must appear in the title or description. Returns a score, 0 = reject."""
-    terms = _terms(query)
+    terms = _query_terms(query)
     title_words = _terms(str(row.get("title") or row.get("name") or ""))
     if not terms or not title_words or _head(title_words) != terms[-1]:
         return 0
     title, desc, rest = set(title_words), set(_terms(str(row.get("description", "")))), set(terms[:-1])
     # 'fruit basket' must not become 'Laundry Basket': a describing word must be in the title or description
     # (search rows carry no description, so `_full` marks rows Polyfork itself counted as matching every word).
+    # A title that is just the noun itself ('Chicken' for 'golden chicken') is the plain object, so it still passes.
     if rest and not rest & (title | desc) and not row.get("_full"):
-        return 0
+        return 500 if title_words == [terms[-1]] else 0
     tris = row.get("triangles") or row.get("triangle_count") or 5000
     extra = len(title - set(terms))  # fewer unrelated title words = closer match
     return 1000 + 300 * len(rest & title) + 100 * len(rest & desc) - 40 * extra - int(tris) // 1000
@@ -59,7 +68,7 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
     """Find and cache best free match; each HTTP request is capped at 8s."""
     started = time.monotonic()
     deadline = deadline or started + 20
-    cachekey = hashlib.sha256(("v7|" + query + "|" + str(cls) + "|" + want).encode()).hexdigest()
+    cachekey = hashlib.sha256(("v8|" + query + "|" + str(cls) + "|" + want).encode()).hexdigest()
     CACHE.mkdir(parents=True, exist_ok=True)
     cached = CACHE / f"{cachekey}.json"
     if cached.exists():
@@ -89,7 +98,7 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
         rows = data.get("assets", data.get("results", data.get("items", [])))
         # Relevance-ranked: the first `full` rows matched every word. Only the full-phrase search counts (a one-word
         # head-noun search 'fully' matches everything with that noun).
-        full = int(data.get("full_matches") or 0) if q == " ".join(_terms(query)) else 0
+        full = int(data.get("full_matches") or 0) if q == " ".join(_query_terms(query)) else 0
         return item, [{**r, "_full": i < full} for i, r in enumerate(rows)]
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(queries) or 1)) as pool:
         futures = [pool.submit(search, x) for x in queries]
@@ -174,4 +183,6 @@ if __name__ == "__main__":  # offline self-check of the strict matcher
     assert not m("Laundry Basket", "fruit basket") and m("Basket of Produce", "fruit basket", full=True)
     assert m("Ice Axe and Crampon Set", "ice axe") and not m("Hand Axe", "ice axe")
     assert m("Coffee Cup", "coffee cup") > m("Takeaway Coffee Cup", "coffee cup")
+    assert m("Chicken", "golden chicken") and m("Chicken", "low-poly chicken model") and not m("Chicken Coop", "chicken")
+    assert not m("Laundry Basket", "fruit basket") and m("Basket", "fruit basket")
     print("polyfork matcher OK")
