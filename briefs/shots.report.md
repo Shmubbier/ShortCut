@@ -31,7 +31,7 @@
 
 ### Step 5: final audit and commit sequence
 
-- Completed the five steps in order. Round-two commits: `1f20626` proof gate, `2da3a88` spec repairs/proof sheets, `c45b5e3` aspect/draft output, `737f5b0` background API jobs; this report update is the fifth commit.
+- Completed the five steps in order. Round-two commits: `1f20626` proof gate, `2da3a88` spec repairs/proof sheets, `c45b5e3` aspect/draft output, `737f5b0` background API jobs, `18b5737` hero aspect fit; this final audit is the fifth step.
 - Final outputs and API-served footage are generated under git-ignored folders. No dependencies were added. The task API on 8793 was shut down after verification; the protected live-test ports were not touched.
 
 ## What works
@@ -61,18 +61,23 @@ $blender = "C:/Users/naomi/Documents/vscode shenanigans/ManilaHack/bench3d/tools
 
 Each final invocation saves numbered PNGs to `shots/out/<name>/frames/` and writes `shots/out/<name>/<name>.mp4`. Specs and timing/easing vocabulary are described in [shots/spec.md](../shots/spec.md) and [shots/library/README.md](../shots/library/README.md).
 
-Checks run:
+## Verification
+
+- `npx.cmd tsc -b`: passed with no output.
+- `node src/video/bench3d/recipe.check.mts`: passed; final line `recipe.ts OK`.
+- Shared venv: parsed `server.py`, imported `server`, and printed `server.py AST/import OK`.
+- API test at :8793: proof 34/34; final GET from `/footage/` returned 200 and FFmpeg confirmed 10.00 s H.264 1080×1920 at 30 fps.
+- All four draft videos and the full hero were probed with Remotion's bundled FFmpeg; aspect, codec, duration and frame rate matched the expected values.
+
+Reproduce the repository checks in PowerShell:
 
 ```powershell
-cd web; npx.cmd tsc -b
+cd web
+npx.cmd tsc -b
 node src/video/bench3d/recipe.check.mts
-# inspect outputs:
-& "C:/Users/naomi/Documents/vscode shenanigans/ManilaHack-wt/shots/web/node_modules/@remotion/compositor-win32-x64-msvc/ffmpeg.exe" -i ../shots/out/hero-orbit/hero-orbit.mp4 -f null NUL
+cd ..
+& "C:/Users/naomi/Documents/vscode shenanigans/ManilaHack/.venv/Scripts/python.exe" -c "import ast; ast.parse(open('server.py', encoding='utf-8').read()); import server; print('server.py AST/import OK')"
 ```
-
-All three MP4s were probed with Remotion's bundled FFmpeg and reported the expected duration, H.264, 960Ã—540 and 24 fps. The shared venv `server.py` AST check could not run because its Python launcher could not locate its base Python runtime.
-
 ## Dependencies, licensing and merge note
 
 No package was installed or added. Final encoding uses Remotion's already installed FFmpeg binary. Blender and the existing `basket-of-produce-7420cf.glb` are reused from the project; the shot specs and generated compositions are new. No external imagery was downloaded. Merge the `shots/` source files and report; generated renders stay ignored. The destination checkout needs the Blender portable path and normal `web/node_modules` link for renders.
-

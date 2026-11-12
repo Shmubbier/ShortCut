@@ -56,6 +56,8 @@ so Filipino voices stay on Edge TTS.
 - **Shot API (round 2, step 4):** `POST /api/shots/render` starts proof/final work and `GET /api/shots/jobs/<id>` returns its stage,
   proof/check results and footage URL. Tested at :8793: all 34 checks passed and an H.264 final was served from `/footage/` for
   segment assignment. Details are in `briefs/shots.report.md`.
+- **Shot follow-up complete (round 2, step 5):** project typecheck, recipe self-check, and shared-venv server import pass. All five
+  requested steps and the aspect-fit follow-up are committed on `codex/shots`; the measured report is `briefs/shots.report.md`.
 
 - Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
 - Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover
