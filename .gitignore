@@ -12,6 +12,8 @@ web/out/
 web/dist/
 bench3d/out/
 web/public/media/
+web/public/footage/
+web/public/renders/
 
 # user asset bucket (runtime data)
 web/public/assets/

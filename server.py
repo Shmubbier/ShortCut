@@ -36,10 +36,13 @@ import music
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
 MEDIA = ROOT / "web" / "public" / "media"  # generated voiceover audio
-for d in (ASSETS, MEDIA):
+FOOTAGE = ROOT / "web" / "public" / "footage"
+RENDERS = ROOT / "web" / "public" / "renders"
+for d in (ASSETS, MEDIA, FOOTAGE, RENDERS):
     d.mkdir(parents=True, exist_ok=True)
 EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif"}  # no SVG: it can carry script
 MAX_BYTES = 15_000_000
+MAX_FOOTAGE_BYTES = 200_000_000
 UA = "Mozilla/5.0 (compatible; Blockcut/0.1)"
 DEFAULT_VOICE = "en-US-AndrewNeural"
 
@@ -126,6 +129,17 @@ class Script(BaseModel):
     direction: Direction
     scenes: list[Scene]
     note: str  # one short sentence to the user about what you did
+
+
+class FootageScene(Scene):
+    transcript_indices: list[int]
+
+
+class FootageScript(BaseModel):
+    title: str
+    direction: Direction
+    scenes: list[FootageScene]
+    note: str
 
 
 def direction_fields(d: Direction, volume: float = 0.5) -> dict:
@@ -464,11 +478,11 @@ def whisper():
     return _whisper
 
 
-async def _tts(text: str, voice: str, path: Path) -> list:
+async def _tts(text: str, voice: str, path: Path, rate: int = 0) -> list:
     import edge_tts
 
     words, audio = [], bytearray()
-    async for ch in edge_tts.Communicate(text, voice, boundary="WordBoundary").stream():
+    async for ch in edge_tts.Communicate(text, voice, rate=f"{rate:+d}%", boundary="WordBoundary").stream():
         if ch["type"] == "audio":
             audio += ch["data"]
         elif ch["type"] == "WordBoundary":  # offsets are in 100 ns ticks
@@ -478,14 +492,14 @@ async def _tts(text: str, voice: str, path: Path) -> list:
     return words
 
 
-def speak(text: str, voice: str) -> tuple[str, Path, list]:
+def speak(text: str, voice: str, rate: int = 0) -> tuple[str, Path, list]:
     """Edge TTS -> mp3 + its own word timings, cached by (voice, text) so re-voicing unchanged lines is free."""
-    key = hashlib.sha1(f"{voice}|{text}".encode()).hexdigest()[:12]
+    key = hashlib.sha1(f"{voice}|{rate}|{text}".encode()).hexdigest()[:12]
     path, timing = MEDIA / f"vo-{key}.mp3", MEDIA / f"vo-{key}.json"
     if not (path.exists() and timing.exists()):
         for attempt in (1, 2):  # the free Edge voice service drops the odd connection; one retry covers it
             try:
-                timing.write_text(json.dumps(asyncio.run(_tts(text, voice, path))))
+                timing.write_text(json.dumps(asyncio.run(_tts(text, voice, path, rate))))
                 break
             except Exception:
                 if attempt == 2:
@@ -513,13 +527,14 @@ def captions(path: Path, voice: str, tts_words: list) -> tuple[list, str]:
 def voice(body: dict) -> dict:
     plan, i = body["plan"], body.get("index")
     v = plan.get("voice") or DEFAULT_VOICE
+    rate = max(-50, min(50, int(plan.get("voiceRate", 0))))
     scenes = [*plan["scenes"]]
     for k in ([i] if i is not None else range(len(scenes))):
         line = (scenes[k].get("voiceover") or "").strip()
         if not line:
             scenes[k] = {**scenes[k], "audio": None, "words": []}
             continue
-        url, path, tts_words = speak(line, v)
+        url, path, tts_words = speak(line, v, rate)
         words, source = captions(path, v, tts_words)
         # Edge TTS mp3 is 48 kbit/s CBR, so size gives the exact length without decoding.
         duration = round(path.stat().st_size * 8 / 48_000, 2)
@@ -736,8 +751,198 @@ def delete_asset(body: dict) -> dict:
     return {"ok": True}
 
 
+def footage_path(url: str) -> Path:
+    name = Path(unquote(urlparse(url).path)).name
+    path = (FOOTAGE / name).resolve()
+    if not name or not path.is_relative_to(FOOTAGE.resolve()) or not path.is_file():
+        raise ValueError("Footage clip was not found; upload it again")
+    return path
+
+
+def upload_footage(body: dict) -> dict:
+    match = re.match(r"data:([^;,]+);base64,(.*)", body.get("data", ""), re.S)
+    if not match:
+        raise ValueError("Expected a video data URL")
+    mime = match.group(1).lower()
+    extensions = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov", "video/x-m4v": ".mp4"}
+    ext = extensions.get(mime)
+    if not ext:
+        raise ValueError("Supported video formats: MP4, WebM, MOV")
+    try:
+        raw = base64.b64decode(match.group(2), validate=True)
+    except Exception as e:
+        raise ValueError("Invalid video data") from e
+    if not raw or len(raw) > MAX_FOOTAGE_BYTES:
+        raise ValueError("Video must be smaller than 200 MB")
+    name = Path(body.get("name", "clip")).stem
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:32] or "clip"
+    path = FOOTAGE / f"{slug}-{uuid.uuid4().hex[:8]}{ext}"
+    path.write_bytes(raw)
+    try:
+        import av
+
+        with av.open(str(path)) as container:
+            duration = round(container.duration / 1_000_000, 3) if container.duration else 0
+    except Exception as e:
+        path.unlink(missing_ok=True)
+        raise ValueError(f"Could not read this video file: {e}") from e
+    if duration <= 0:
+        path.unlink(missing_ok=True)
+        raise ValueError("The video has no readable duration")
+    return {"url": f"/footage/{path.name}", "name": path.name, "duration": duration}
+
+
+def transcribe_footage(body: dict) -> dict:
+    path = footage_path(body.get("url", ""))
+    language = body.get("language")
+    segments, _ = whisper().transcribe(str(path), word_timestamps=True, language=language or None, vad_filter=True)
+    out = []
+    for seg in segments:
+        words = [{"text": w.word.strip(), "start": round(w.start, 2), "end": round(w.end, 2)}
+                 for w in (seg.words or []) if w.word.strip()]
+        text = seg.text.strip()
+        if text:
+            out.append({"start": round(seg.start, 2), "end": round(seg.end, 2), "text": text, "words": words})
+    return {"segments": out}
+
+
+def storyboard_footage(body: dict) -> dict:
+    url = body.get("url", "")
+    path = footage_path(url)
+    transcript = body.get("transcript") or []
+    if not transcript:
+        raise ValueError("Transcribe the clip before building a storyboard")
+    if len(transcript) > 1000:
+        raise ValueError("Transcript is too long to storyboard in one pass")
+    duration = body.get("duration")
+    if not duration:
+        import av
+        with av.open(str(path)) as container:
+            duration = container.duration / 1_000_000
+    style = body.get("style", "editorial")
+    if style not in ("editorial", "2d", "pixel", "3d"):
+        style = "editorial"
+    rows = [{"index": i, "start": float(x.get("start", 0)), "end": float(x.get("end", 0)), "text": str(x.get("text", ""))[:1200]}
+            for i, x in enumerate(transcript)]
+    if not backend():
+        groups = [rows[round(k * len(rows) / 6):round((k + 1) * len(rows) / 6)] for k in range(6)]
+        scenes = []
+        for k, group in enumerate(g for g in groups if g):
+            indices = [x["index"] for x in group]
+            scenes.append({"kind": "title" if k == 0 else "outro" if k == 5 else "fact", "title": f"Clip beat {k + 1}",
+                "headline": group[0]["text"][:64], "sub": "", "value": "", "transition": "cut", "effects": [],
+                "asset": "", "purpose": "Footage transcript beat", "voiceover": " ".join(x["text"] for x in group),
+                "importance": 2, "role": "footage", "transcript_indices": indices, "prop_json": "",
+                "prop": json.loads(EXAMPLE_PROP) if style == "3d" and k in (0, len(groups) - 1) else None})
+        direction = demo_direction(style)
+        note = "Demo mode: built a basic storyboard from the clip transcript."
+    else:
+        made = ask(f"""Organize this existing video transcript into 4-8 chronological storyboard segments.
+Do not invent speech. Each segment must reference the original transcript rows it contains using transcript_indices.
+Groups must be contiguous, non-overlapping, in order, and cover all rows. Use the supplied timestamps as clip trim points.
+Choose short on-screen headlines and suitable transitions/effects. Set every role to footage. Style is {style}.
+Transcript rows (index, start/end seconds, exact text):
+{json.dumps(rows, ensure_ascii=False)}
+{EDITING_GUIDE}
+{style_text(style)}""", FootageScript)
+        scenes = [s.model_dump() for s in made.scenes]
+        direction = direction_fields(made.direction)
+        note = made.note
+    scenes_out = []
+    transcript_cursor = 0
+    for i, scene in enumerate(scenes):
+        proposed = sorted(set(int(x) for x in scene.pop("transcript_indices", []) if 0 <= int(x) < len(transcript)))
+        fallback = min(transcript_cursor, len(transcript) - 1)
+        high = len(transcript) - 1 if i == len(scenes) - 1 else max((x for x in proposed if x >= transcript_cursor), default=fallback)
+        indices = list(range(transcript_cursor, min(high, len(transcript) - 1) + 1))
+        transcript_cursor = indices[-1] + 1
+        rows_used = [transcript[j] for j in indices]
+        start = max(0.0, float(rows_used[0].get("start", 0)))
+        end = min(float(duration), float(rows_used[-1].get("end", start + 1)))
+        if end <= start:
+            end = min(float(duration), start + 1)
+        words = []
+        for row in rows_used:
+            for word in row.get("words", []):
+                ws, we = float(word.get("start", 0)), float(word.get("end", 0))
+                if we >= start and ws <= end:
+                    words.append({"text": word.get("text", ""), "start": round(max(0, ws - start), 2), "end": round(max(0, we - start), 2)})
+        prop_json = str(scene.pop("prop_json", "")).strip()
+        if prop_json and prop_json != "keep":
+            try:
+                scene["prop"] = json.loads(prop_json)
+            except json.JSONDecodeError:
+                scene["prop"] = None
+        scene.pop("transcript_indices", None)
+        scene.update({"id": uuid.uuid4().hex[:8], "role": "footage", "voiceover": " ".join(x.get("text", "").strip() for x in rows_used),
+                      "words": words, "audio": None, "length": round(end - start, 3),
+                      "media": {"type": "video", "url": f"/footage/{path.name}", "name": path.name,
+                                "trimStart": start, "trimEnd": end, "duration": duration}})
+        scenes_out.append(scene)
+    return {"title": body.get("title") or path.stem, "style": style, "pace": "punchy", "aspect": body.get("aspect", "9:16"),
+            "captions": True, **direction, "scenes": scenes_out, "note": note}
+
+
+RENDER_JOBS: dict[str, dict] = {}
+
+
+def _absolute_media(plan: dict) -> dict:
+    base = "http://127.0.0.1:8787"
+    def fix(value):
+        if isinstance(value, dict):
+            return {k: fix(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [fix(v) for v in value]
+        if isinstance(value, str) and value.startswith(("/assets/", "/media/", "/music/", "/footage/")):
+            return base + value
+        return value
+    return fix(plan)
+
+
+def render(body: dict) -> dict:
+    plan = body.get("plan")
+    if not isinstance(plan, dict) or not plan.get("scenes"):
+        raise ValueError("A video plan with at least one segment is required")
+    rid = uuid.uuid4().hex[:12]
+    props = ROOT / "web" / "out" / f"{rid}.json"
+    target = RENDERS / f"{rid}.mp4"
+    props.parent.mkdir(parents=True, exist_ok=True)
+    props.write_text(json.dumps(_absolute_media(plan), ensure_ascii=False), encoding="utf-8")
+    RENDER_JOBS[rid] = {"status": "queued", "progress": 0, "url": None}
+    def run():
+        job = RENDER_JOBS[rid]
+        try:
+            job["status"] = "rendering"
+            cli = ROOT / "web" / "node_modules" / "@remotion" / "cli" / "remotion-cli.js"
+            node = shutil.which("node")
+            if not node or not cli.is_file():
+                raise RuntimeError("Remotion CLI is not installed; run npm install in web/")
+            proc = subprocess.Popen([node, str(cli), "render", "src/video/index.tsx", "Main", str(target),
+                                     f"--props={props}", "--gl=angle"], cwd=ROOT / "web", stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            tail = ""
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                tail = (tail + line)[-3000:]
+                match = re.search(r"Rendered\s+(\d+)/(\d+)", line)
+                if match and int(match.group(2)):
+                    job["progress"] = min(99, round(100 * int(match.group(1)) / int(match.group(2))))
+            if proc.wait() != 0:
+                raise RuntimeError(tail.strip() or "Remotion render failed")
+            job.update(status="done", progress=100, url=f"/renders/{target.name}")
+        except Exception as e:
+            job.update(status="error", error=str(e), progress=0)
+        finally:
+            props.unlink(missing_ok=True)
+    import threading
+    threading.Thread(target=run, daemon=True).start()
+    return {"id": rid, **RENDER_JOBS[rid]}
+
+
 ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/assets/upload": upload,
-          "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/delete": delete_asset}
+          "/api/assets/scrape": scrape, "/api/assets/find": find, "/api/assets/delete": delete_asset,
+          "/api/footage/upload": upload_footage, "/api/footage/transcribe": transcribe_footage,
+          "/api/footage/storyboard": storyboard_footage, "/api/render": render}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -746,18 +951,51 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(list_assets(), 200)
         if self.path == "/api/music":
             return self.reply(MUSIC, 200)
+        if self.path.startswith("/api/render/"):
+            rid = self.path.rsplit("/", 1)[-1]
+            return self.reply(RENDER_JOBS.get(rid, {"status": "not_found", "progress": 0}), 200 if rid in RENDER_JOBS else 404)
         # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
-        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT)):
+        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/renders/", RENDERS)):
             if self.path.startswith(prefix):
                 p = folder / Path(unquote(urlparse(self.path).path)).name  # .name keeps us inside the folder
                 if not p.is_file():
                     return self.send_error(404)
-                data = p.read_bytes()
-                self.send_response(200)
+                size = p.stat().st_size
+                start, end, code = 0, size - 1, 200
+                requested = self.headers.get("Range", "")
+                match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested)
+                if match:
+                    if not match.group(1):
+                        suffix = int(match.group(2) or 0)
+                        start = max(0, size - suffix)
+                    else:
+                        start = int(match.group(1))
+                        if match.group(2):
+                            end = min(size - 1, int(match.group(2)))
+                    if start >= size or end < start:
+                        self.send_response(416)
+                        self.send_header("Content-Range", f"bytes */{size}")
+                        self.end_headers()
+                        return
+                    code = 206
+                count = end - start + 1
+                self.send_response(code)
                 self.send_header("Content-Type", mimetypes.guess_type(p.name)[0] or "application/octet-stream")
-                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Length", str(count))
+                self.send_header("Accept-Ranges", "bytes")
+                if code == 206:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
                 self.end_headers()
-                return self.wfile.write(data)
+                with p.open("rb") as source:
+                    source.seek(start)
+                    remaining = count
+                    while remaining:
+                        chunk = source.read(min(64_000, remaining))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        remaining -= len(chunk)
+                return
         self.send_error(404)
 
     def do_POST(self):
@@ -765,7 +1003,11 @@ class Handler(BaseHTTPRequestHandler):
         if not fn:
             return self.send_error(404)
         try:
-            out, code = fn(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))), 200
+            length = int(self.headers.get("Content-Length", 0))
+            max_request = MAX_FOOTAGE_BYTES * 4 // 3 + 2_000_000 if self.path == "/api/footage/upload" else 30_000_000
+            if length > max_request:
+                raise ValueError("Request body is too large")
+            out, code = fn(json.loads(self.rfile.read(length))), 200
         except Exception as e:
             print(f"{self.path} failed:", repr(e))
             out, code = {"error": str(e)}, 400

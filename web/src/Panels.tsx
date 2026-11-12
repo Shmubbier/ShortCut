@@ -147,7 +147,7 @@ export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileP
   )
 }
 
-export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport }: Edit & { voice: (i: number | null) => void; busy: string; onExport: () => void }) {
+export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport, onRender, renderUrl }: Edit & { voice: (i: number | null) => void; busy: string; onExport: () => void; onRender: () => void; renderUrl: string }) {
   const voiced = plan.scenes.filter((s) => s.audio).length
   return (
     <>
@@ -165,12 +165,20 @@ export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport }:
         </select>
       </label>
       <button onClick={() => voice(null)} disabled={!!busy}>{busy === 'voice-all' ? 'Voicing…' : `Voice all segments (${voiced}/${plan.scenes.length} done)`}</button>
+      <label>Talking speed · {plan.voiceRate ?? 0}%
+        <input type="range" min={-20} max={40} step={5} value={plan.voiceRate ?? 0}
+          onPointerDown={snapshot} onKeyDown={(e) => { if (e.key.startsWith('Arrow')) snapshot() }}
+          onChange={(e) => change({ ...plan, voiceRate: Number(e.target.value) })} />
+      </label>
+      <small className="tip">Set the pace, then regenerate voiceover to apply it to the audio and captions.</small>
 
       <MusicPanel plan={plan} change={change} snapshot={snapshot} />
 
       <h3>Project</h3>
+      <button onClick={onRender} disabled={!!busy}>{busy === 'render' ? 'Rendering MP4…' : 'Render MP4'}</button>
+      {renderUrl && <a className="button" href={renderUrl} download>Download finished video</a>}
       <button className="ghost" onClick={onExport}>Download project file (.json)</button>
-      <small className="tip">MP4 export is being built (footage + export track). Your project saves in this browser automatically.</small>
+      <small className="tip">Your project saves in this browser automatically.</small>
     </>
   )
 }

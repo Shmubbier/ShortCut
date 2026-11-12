@@ -203,7 +203,7 @@ export function Canvas(props: Props) {
               )}
               <p>{s.value && <b>{s.value} </b>}{s.headline || s.purpose || (empty ? 'Select me, then write or ask the assistant' : '')}</p>
               {/* Timing: length vs the longest segment, coloured by importance; dots set importance */}
-              <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
+              <div className={`meter imp${s.importance ?? 2} ${lens[i].source === 'manual' ? 'manual' : ''}`} title={`${((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s · ${{ voice: 'from the voiceover', script: 'from script length', manual: 'fixed by you', footage: 'from footage trim' }[lens[i].source]} · ${IMPORTANCE[s.importance ?? 2].label}`}>
                 <span className="secs">{((lens[i].frames - OVERLAP) / FPS).toFixed(1)}s</span>
                 <span className="bar"><i style={{ width: `${(lens[i].frames / longest) * 100}%` }} /></span>
                 <span className="pips" onPointerDown={(e) => e.stopPropagation()}>

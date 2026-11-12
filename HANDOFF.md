@@ -30,6 +30,14 @@ How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things sta
   Create loads the matching sample or demo plan with a note instead of erroring. A usage-limit error also makes the server
   skip Claude Code for ~20 min, so the fallback is instant. The *first* failing request is still slow (~2 min), because
   Claude Code retries before giving up.
+- **Phase 4 implementation (Codex branch `codex/phase-5-demo-reliability`):** upload MP4/WebM/MOV with a 200 MB cap, PyAV
+  duration, Whisper transcript with word timings, transcript-to-footage storyboard, trimmed video playback, music ducking,
+  background Remotion MP4 render jobs, and a render download link in Settings. The Style panel also has a voice-rate slider;
+  changing rate clears stale audio/captions so the user can regenerate at the chosen pace.
+- **Visual smoke renders:** 2D and 3D stills rendered in 9:16, 4:5, 1:1 and 16:9; short 16:9 MP4 renders succeeded for both.
+  The portrait 2D check exposed overflowing headlines; wrapping was fixed and the 9:16 frame re-rendered. These were single
+  scene smoke renders, not a full multi-scene or live-browser QA pass. 3D logs include non-blocking Three.js deprecation
+  warnings.
 
 ## The new spec (Nov 12): "AI-powered video storyboard and editing application"
 
@@ -93,6 +101,40 @@ later segments, autosave restore after reload, New video → hero → exit anima
 
 **Left for whoever picks up the UI next (small):** a duration stepper on the card itself (it's in the inspector today), a
 "default transition" apply-to-all control, and keyboard shortcuts (Delete, Esc to deselect). None of these block the demo.
+
+### Phase 5: demo readiness, visual validation, and asset reliability
+
+Do this after Phase 4's footage and export path works. The goal is a reliable, quick live demo that exercises the real editor
+and produces a finished video, while checking the 2D and 3D styles beyond the current limited still-render coverage.
+
+1. **Make generation feel fast and dependable:** measure prompt-to-first-usable-storyboard time and follow-up edit time; reduce
+   avoidable latency in the generation path, and keep a useful sample/fallback available when the AI backend is slow or offline.
+   Report actual progress rather than adding fake progress states.
+2. **Voice pacing:** add an editable talking-speed control for generated voiceover and support a revision prompt that can make
+   narration/video pacing quicker. Keep generated audio, word timings, captions, and segment duration aligned after speed changes.
+3. **2D/3D validation:** exercise representative 2D and 3D plans in all supported aspect ratios, including multi-scene previews
+   and final renders. Fix rendering failures, invalid/empty 3D props, caption overlap, and transition issues found; extend the
+   existing `recipe.check.mts` where it helps catch regressions. Record the cases and outcomes here.
+4. **Reliable asset discovery:** improve beyond image-only topic search to find and import usable images, video clips, and
+   3D model/reference assets. Preserve source attribution, validate formats and URLs, handle sparse or failed search results,
+   and provide clear fallbacks. Prefer sources and licenses suitable for the demo; don't imply a media type is supported until
+   it can be previewed and used in a segment.
+5. **Demo-ready project and walkthrough:** keep a preloaded asset library and at least two prepared example projects that can
+   run offline or under poor Wi-Fi. Rehearse the path: prompt → generated video → faster-pace revision → select a segment and
+   use the inspector/free canvas → drag in a prepared image/effect → switch palette/style → edit the transcript → export.
+   Keep reference-video style extraction framed as a future capability unless it is implemented end-to-end.
+6. **Export access:** provide a clear way to reach the finished render from the editor (Share/export area or equivalent), and
+   verify the exported file matches the preview, including captions, voice pacing, music, and any assigned footage.
+
+**Completion check:** a rehearsed demo can complete both prompt and revision flows promptly, showcase manual editing and asset
+assignment, render a valid final video, and recover gracefully from unavailable AI/search services. Track measured timings and
+known limitations here rather than claiming unverified capabilities.
+
+**Current follow-up:** Phase 4 code is implemented but still needs a real 20-60 s clip run through upload → transcription →
+storyboard → preview → export. This checkout has no `.venv` or local Whisper model, so that integration path could not be
+exercised here. Phase 5 still needs measured prompt/revision latency work, prepared offline demo projects, and broader
+source-aware discovery for usable video and 3D model assets. Current search/import supports images; reference-video style
+extraction remains deferred.
 
 Original queue:
 1. Centred first prompt that minimises into a floating assistant icon (jiggles while working); bottom progress bar driven by real stages.

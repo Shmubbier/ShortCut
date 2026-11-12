@@ -10,7 +10,7 @@ import './studio.css'
 
 type Asset = { url: string; name: string; source?: string }
 type Clip = { url: string; name: string; duration?: number } // uploaded video footage (spec §11)
-type Passage = { start: number; end: number; text: string }
+type Passage = { start: number; end: number; text: string; words?: { text: string; start: number; end: number }[] }
 type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'clip'; url: string; name: string; duration?: number }
 type Msg = { who: 'you' | 'ai'; text: string; scope: string }
 type PanelId = 'assets' | 'script' | 'style' | 'settings'
@@ -39,7 +39,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const SAVE_KEY = 'blockcut.project.v1'
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
 // Footage endpoints are built on the server side (HANDOFF.md, Codex brief); a 404 means that part isn't installed yet.
-const FOOTAGE_MISSING = 'Video footage needs the footage server endpoints (in progress). Images and AI generation work now.'
+const FOOTAGE_MISSING = 'The footage API is unavailable. Start or restart server.py, then try again.'
 
 const ICONS: Record<PanelId, { label: string; path: string }> = {
   assets: { label: 'Asset Library', path: 'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01' },
@@ -75,6 +75,7 @@ export default function App() {
   const [assetMsg, setAssetMsg] = useState('')
   const [clips, setClips] = useState<Clip[]>(saved?.clips ?? [])
   const [footage, setFootage] = useState<{ clip: Clip; passages: Passage[] } | null>(null) // transcript awaiting review
+  const [renderUrl, setRenderUrl] = useState('')
   const player = useRef<PlayerRef>(null)
   const planRef = useRef(plan)
   planRef.current = plan
@@ -158,7 +159,7 @@ export default function App() {
     setPanel('assets')
     try {
       const r: { segments: Passage[] } = await api('/api/footage/transcribe', { url: c.url })
-      setFootage({ clip: c, passages: r.segments.map((x) => ({ start: x.start, end: x.end, text: x.text.trim() })) })
+      setFootage({ clip: c, passages: r.segments.map((x) => ({ start: x.start, end: x.end, text: x.text.trim(), words: x.words })) })
     } catch (e) {
       footageError(e)
     } finally {
@@ -208,7 +209,7 @@ export default function App() {
   const say = (who: Msg['who'], text: string, s = scope) => setLog((l) => [...l, { who, text, scope: s }])
   const errText = (e: unknown) => `⚠ ${e instanceof Error ? e.message : e}`
 
-  // First prompt: hero shrinks into the assistant, then images → script → storyboard reveal → preview, each a real step.
+  // First prompt: image search runs alongside writing so discovery doesn't hold up the storyboard.
   // The hero card stays on screen and "cooks" (real stages + elapsed time) until the whole plan is ready.
   // Only then does it shrink into the assistant and the workspace animate in: the card-by-card population
   // is a presentation of finished data, so nobody stares at a half-empty workspace.
@@ -219,22 +220,30 @@ export default function App() {
     setGen({ stages, at: 0 })
     setCookStart(Date.now())
     say('you', text, 'New video')
-    let at = 0
+    let completed = 0
+    const stageDone = () => setGen({ stages, at: ++completed })
     try {
-      let bucket = assets
-      if (autoImages) {
-        try {
-          const found: Asset[] = await api('/api/assets/find', { query: text, limit: 6 })
-          bucket = [...assets, ...found]
-          setAssets(bucket)
-          say('ai', `Found ${found.length} images for “${text}” (ScrapeGraphAI web search).`, 'New video')
-        } catch (e) {
-          say('ai', `${errText(e)} · carrying on without new images.`, 'New video')
-        }
-        setGen({ stages, at: ++at })
+      const imageTask: Promise<Asset[]> = autoImages ? api('/api/assets/find', { query: text, limit: 6 }).then((found: Asset[]) => {
+        setAssets((current) => [...current, ...found])
+        say('ai', `Found ${found.length} images for “${text}” (ScrapeGraphAI web search).`, 'New video')
+        stageDone()
+        return found
+      }).catch((e) => {
+        say('ai', `${errText(e)} · carrying on without new images.`, 'New video')
+        stageDone()
+        return []
+      }) : Promise.resolve([])
+      const planTask: Promise<Plan & { note?: string }> = api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets })
+        .then((result: Plan & { note?: string }) => { stageDone(); return result })
+      const [p, found] = await Promise.all([planTask, imageTask])
+      if (found.length) {
+        let visual = 0
+        p.scenes = p.scenes.map((s) => {
+          if (s.asset || !['image', 'broll'].includes(s.role ?? '') && !['fact', 'stat'].includes(s.kind)) return s
+          const asset = found[visual++]
+          return asset ? { ...s, asset: asset.url } : s
+        })
       }
-      const p: Plan & { note?: string } = await api('/api/plan', { topic: text, style, aspect, pace: 'punchy', assets: bucket })
-      setGen({ stages, at: ++at }) // everything gathered: all stages ticked
       await wait(500)
       setLeaving(true) // hero eases into the assistant corner…
       await wait(450)
@@ -285,6 +294,31 @@ export default function App() {
       setPlan(r.plan)
     } catch (e) {
       say('ai', errText(e), index === null ? 'Voiceover' : `Segment ${index + 1} voice`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  async function renderVideo() {
+    if (!plan || busy) return
+    setBusy('render')
+    setRenderUrl('')
+    setAssetMsg('Starting MP4 render…')
+    try {
+      const job: { id: string; status: string } = await api('/api/render', { plan })
+      for (let attempt = 0; attempt < 600; attempt++) {
+        await wait(2000)
+        const status = await api(`/api/render/${job.id}`) as { status: string; progress?: number; url?: string; error?: string }
+        if (status.status === 'done' && status.url) {
+          setRenderUrl(status.url)
+          setAssetMsg('MP4 render complete')
+          return
+        }
+        if (status.status === 'error') throw new Error(status.error || 'MP4 render failed')
+      }
+      throw new Error('MP4 render is taking longer than expected; check the API server log')
+    } catch (e) {
+      setAssetMsg(errText(e))
     } finally {
       setBusy('')
     }
@@ -362,7 +396,7 @@ export default function App() {
   const selEmpty = plan && sel !== null && plan.scenes[sel] ? isEmpty(plan.scenes[sel]) : false
   const busyLabel = gen ? '' // generation shows its progress on the hero card, not the bottom bar
     : busy === 'ai' ? 'Applying your edit…' : busy === 'voice-all' ? 'Voicing all segments…' : busy.startsWith('voice-') ? 'Voicing the segment…'
-      : busy.startsWith('find') ? 'Searching the web for images…' : busy === 'upload' ? 'Uploading footage…' : busy === 'transcribe' ? 'Transcribing the footage (Whisper)…' : ''
+      : busy.startsWith('find') ? 'Searching the web for images…' : busy === 'upload' ? 'Uploading footage…' : busy === 'transcribe' ? 'Transcribing the footage (Whisper)…' : busy === 'render' ? 'Rendering the MP4…' : ''
   const curAspect = plan?.aspect ?? aspect
   const { w, h } = ASPECTS[curAspect]
 
@@ -442,7 +476,10 @@ export default function App() {
           {panel === 'assets' && assetsPanel}
           {panel === 'script' && plan && <ScriptPanel plan={plan} change={change} snapshot={snapshot} sel={sel} onSelect={select} />}
           {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} />}
-          {panel === 'settings' && plan && <SettingsPanel plan={plan} change={change} snapshot={snapshot} voice={voice} busy={busy} onExport={download} />}
+          {panel === 'settings' && plan && <SettingsPanel plan={plan} change={(p) => {
+            if (p.voiceRate !== plan.voiceRate) p = { ...p, scenes: p.scenes.map((s) => ({ ...s, audio: null, words: s.media?.type === 'video' && !s.audio ? s.words : [] })) }
+            change(p)
+          }} snapshot={snapshot} voice={voice} busy={busy} onExport={download} onRender={renderVideo} renderUrl={renderUrl} />}
           {!plan && panel !== 'assets' && <p className="tip">Available once the storyboard is ready.</p>}
         </Flyout>
       )}
@@ -576,10 +613,10 @@ export default function App() {
         <div className="progress" role="progressbar" aria-label={busyLabel}
           aria-valuenow={gen ? Math.round((gen.at / gen.stages.length) * 100) : undefined} aria-valuemin={0} aria-valuemax={100}>
           <div className="progress-track">
-            {gen ? <i style={{ width: `${(gen.at / gen.stages.length) * 100}%` }} /> : null}
-            <b className="progress-run" style={gen ? { left: `${(gen.at / gen.stages.length) * 100}%`, width: `${100 / gen.stages.length}%` } : undefined} />
+            {gen ? <i style={{ width: `${Math.min(100, (gen.at / gen.stages.length) * 100)}%` }} /> : null}
+            <b className="progress-run" style={gen ? { left: `${Math.min(100 - 100 / gen.stages.length, (gen.at / gen.stages.length) * 100)}%`, width: `${100 / gen.stages.length}%` } : undefined} />
           </div>
-          <span>{gen ? `${gen.at + 1}/${gen.stages.length} · ` : ''}{busyLabel}</span>
+          <span>{gen ? `${Math.min(gen.at + 1, gen.stages.length)}/${gen.stages.length} · ` : ''}{busyLabel}</span>
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, Easing, Img, interpolate, random, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion'
+import { AbsoluteFill, Audio, Easing, Img, interpolate, OffthreadVideo, random, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import type { Recipe } from './bench3d/recipe'
 import { Stage3D } from './Stage3D'
 import { fontCss, resolveTheme, stack, type Style, type Theme, type ThemeChoice } from './theme'
@@ -23,7 +23,7 @@ export type SceneData = {
   purpose?: string; voiceover?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
 }
 export type Plan = {
-  title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; captionStyle?: CaptionStyle; voice?: string
+  title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; captionStyle?: CaptionStyle; voice?: string; voiceRate?: number
   music?: Track | null; musicOptions?: string[]; musicWhy?: string; styleOptions?: Style[]; styleWhy?: string
   scenes: SceneData[]
 }
@@ -64,6 +64,10 @@ export const timing = (s: SceneData, pace: Plan['pace']) => {
     const frames = Math.round(Math.min(MAX_LEN, Math.max(MIN_LEN, s.length)) * FPS) + OVERLAP
     return { frames, source: 'manual' as const, voice, hold: 0, cutsVoice: voice > frames - OVERLAP / 2 }
   }
+  if (s.media?.type === 'video' && s.media.trimEnd !== undefined) {
+    const frames = Math.max(FPS, Math.round((s.media.trimEnd - (s.media.trimStart ?? 0)) * FPS) + OVERLAP)
+    return { frames, source: 'footage' as const, voice, hold: 0, cutsVoice: false }
+  }
   if (s.audio?.duration) {
     return { frames: Math.max(45, voice + OVERLAP + imp.hold), source: 'voice' as const, voice, hold: imp.hold, cutsVoice: false }
   }
@@ -97,7 +101,7 @@ const Words = ({ text, t, size, color, fx, delay = 0, mark = false }: { text: st
       <span style={{ opacity: f % 16 < 8 ? 1 : 0, color: t.accent }}>▌</span>
     </div>
   ) : (
-    <div style={{ ...style, display: 'flex', flexWrap: 'wrap', gap: '0 0.28em' }}>
+    <div style={{ ...style, display: 'flex', flexWrap: 'wrap', maxWidth: '100%', gap: '0 0.28em' }}>
       {text.split(' ').map((w, i) => {
         const s = spring({ frame: f - delay - i * 3, fps, config: bouncy ? { damping: 7, mass: 0.7 } : { damping: 11, mass: 0.6 } }) // overshoot + settle
         const squash = bouncy ? `scale(${1 + (1 - s) * 0.3}, ${1 - (1 - s) * 0.3})` : ''
@@ -111,7 +115,7 @@ const Words = ({ text, t, size, color, fx, delay = 0, mark = false }: { text: st
   )
   if (!mark && !fx.includes('highlight')) return words
   return (
-    <div style={{ position: 'relative', width: 'fit-content' }}>
+    <div style={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
       <div style={{ position: 'absolute', left: -10, bottom: 4, height: '38%', width: `${swipe}%`, background: t.accent, opacity: 0.35 }} />
       {words}
     </div>
@@ -121,7 +125,7 @@ const Words = ({ text, t, size, color, fx, delay = 0, mark = false }: { text: st
 const Sub = ({ text, t, color, delay }: { text: string; t: Theme; color: string; delay: number }) => {
   const f = useF(t)
   const o = interpolate(f, [delay, delay + 10], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
-  return text ? <div style={{ fontFamily: stack(t.body), fontSize: t.step > 1 ? 22 : 38, color, opacity: o, marginTop: 36, maxWidth: 1300, lineHeight: 1.5 }}>{text}</div> : null
+  return text ? <div style={{ fontFamily: stack(t.body), fontSize: t.step > 1 ? 22 : 38, color, opacity: o, marginTop: 36, maxWidth: '100%', lineHeight: 1.5 }}>{text}</div> : null
 }
 
 // Asset as a cutout: taped paper (editorial/3D), thick outlined sticker (2D), hard-edged sprite (pixel).
@@ -264,10 +268,15 @@ const Shot = ({ s, t, i, len, captions }: { s: SceneData; t: Theme; i: number; l
   let ink = t.ink[i % t.ink.length]
   if (fx.includes('invert')) [bg, ink] = [ink, bg]
   const prop = t.style === '3d' && s.prop ? s.prop : null
+  const footage = s.media?.type === 'video' ? s.media : null
   // A 3D prop owns the lower (tall) or right (wide) part of the frame, so the text column narrows and the image cutout steps aside.
   const pad = tall ? `${height * 0.1}px ${width * 0.08}px` : `0 ${width * 0.08}px`
   return (
     <AbsoluteFill style={{ background: bg, transform: `translate(${x + sx}px, ${y + sy}px) scale(${zoom})`, filter: `blur(${blur}px)` }}>
+      {footage && <OffthreadVideo src={footage.url} startFrom={Math.round((footage.trimStart ?? 0) * FPS)}
+        endAt={Math.max(1, Math.round((footage.trimEnd ?? (footage.trimStart ?? 0) + len / FPS) * FPS))}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />}
+      {footage && <AbsoluteFill style={{ background: 'rgba(0,0,0,.22)' }} />}
       {t.style === '2d' && <Shapes2D t={t} i={i} />}
       {prop && <Stage3D recipe={prop} len={len} i={i} />}
       <AbsoluteFill style={{
@@ -307,7 +316,11 @@ const Grain = ({ t }: { t: Theme }) => {
 // Background music bed: loops under the whole video, fades in/out, and ducks while the narrator speaks.
 const Music = ({ p, starts }: { p: Plan; starts: number[] }) => {
   const total = planDuration(p)
-  const speech = p.scenes.flatMap((s, i) => (s.audio?.duration ? [[starts[i], starts[i] + Math.ceil(s.audio.duration * FPS)]] : []))
+  const speech = p.scenes.flatMap((s, i) => {
+    const voice = s.audio?.duration ? [[starts[i], starts[i] + Math.ceil(s.audio.duration * FPS)]] : []
+    const clip = s.media?.type === 'video' ? [[starts[i], starts[i] + sceneLen(s, p.pace)]] : []
+    return [...voice, ...clip]
+  })
   const base = p.music?.volume ?? 0.5
   if (!p.music?.url) return null
   return (
