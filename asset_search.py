@@ -98,10 +98,27 @@ def _polyfork(q, limit):
                               x.get("page") or "https://polyfork.dev/asset/"+x["id"],"Polyfork free asset (see source)","Polyfork",fmt="glb",provider="Polyfork"))]
 
 
+# Sites whose image results are article preview cards (a title on a blank page), not photos.
+CARD_SITES = re.compile(r"grokipedia\.com", re.I)
+
+
+def flatness(raw: bytes) -> float:
+    """Share of the image covered by its single most common (coarse) colour. Text cards and logos on a plain background
+    score 0.95+; photos and illustrations stay under ~0.6 (measured on the asset bucket)."""
+    import io
+    import av
+    import numpy as np
+    with av.open(io.BytesIO(raw)) as c:
+        f = next(c.decode(video=0)).to_ndarray(format="rgb24")
+    q = f[::max(1, f.shape[0] // 120), ::max(1, f.shape[1] // 120)].reshape(-1, 3).astype(int) // 16
+    return float(np.unique(q[:, 0] * 256 + q[:, 1] * 16 + q[:, 2], return_counts=True)[1].max() / len(q))
+
+
 def _ddg(q, limit):
     try:
         from ddgs import DDGS
         return [c for x in DDGS().images(q,max_results=limit*2) if x.get("image")
+                and not CARD_SITES.search(f"{x.get('url','')} {x.get('image','')}")
                 if (c:=_candidate("image",x.get("image"),x.get("image"),x.get("title"),x.get("url"),"Unknown; check source terms",x.get("source"),fmt="image",provider="DuckDuckGo"))]
     except Exception as e:
         print("asset search ddg:",repr(e)[:180]); return []
@@ -174,6 +191,12 @@ def fetch(candidate):
                 if marker in tuple(range(0xC0,0xC4))+tuple(range(0xC5,0xC8))+tuple(range(0xC9,0xCC))+tuple(range(0xCD,0xD0)):
                     height,width=struct.unpack(">HH",raw[i+3:i+7]); break
                 i+=size
+        try:
+            flat = flatness(raw)
+        except Exception:
+            flat = 0.0  # undecodable here: leave it to the dimension checks
+        if flat > 0.8:
+            raise ValueError(f"Looks like a text card or logo, not a photo (flatness {flat:.2f})")
         if not width or not height or width<128 or height<128 or width>20000 or height>20000:
             raise ValueError("Image dimensions are missing or outside supported limits")
         ext={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"}.get(mime)

@@ -912,9 +912,13 @@ def find_images(query: str, limit: int = 8) -> list:
                 picks.append(c)
 
         def download(c):
+            if asset_search.CARD_SITES.search(f"{c[1]} {c[3]}"):
+                return None
             try:
                 raw, mime = fetch(c[1], MAX_BYTES)
-                return (c, raw, mime) if len(raw) > 15_000 and mime.split(";")[0] in EXT else None
+                if len(raw) <= 15_000 or mime.split(";")[0] not in EXT:
+                    return None
+                return None if asset_search.flatness(raw) > 0.8 else (c, raw, mime)  # skip text cards / logos
             except Exception:
                 return None
 
