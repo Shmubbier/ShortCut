@@ -56,6 +56,25 @@ const STARTERS = [
   { label: '3D showcase', text: 'How a city bus route works: the depot, the stops and the fare', content: 'showcase', style: '3d' },
 ]
 
+// Dark mode (mockup branch): sets data-theme on <html>; the choice is remembered in this browser.
+const initialTheme = (() => { try { return localStorage.getItem('shortcut.theme') ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') } catch { return 'light' } })()
+document.documentElement.dataset.theme = initialTheme
+function ThemeToggle() {
+  const [dark, setDark] = useState(initialTheme === 'dark')
+  const flip = () => {
+    const next = dark ? 'light' : 'dark'
+    document.documentElement.dataset.theme = next
+    try { localStorage.setItem('shortcut.theme', next) } catch { /* private mode */ }
+    setDark(!dark)
+  }
+  return (
+    <button className="theme-toggle" onClick={flip} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'}>
+      {dark ? <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+        : <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>}
+    </button>
+  )
+}
+
 const SAVE_KEY = 'blockcut.project.v1' // storage key kept from the old name so saved projects survive
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
 // Footage endpoints are built on the server side (HANDOFF.md, Codex brief); a 404 means that part isn't installed yet.
@@ -521,6 +540,7 @@ export default function App() {
 
   return (
     <div className={`studio ${started ? 'started' : ''}`}>
+      <ThemeToggle />
       {started && (
         <nav className="rail" aria-label="Panels">
           <div className="rail-brand" title="ShortCut"><Logo size={34} /></div>
