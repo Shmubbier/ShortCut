@@ -1250,6 +1250,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(MUSIC, 200)
         if self.path == "/api/models3d":
             folder = ROOT / "web" / "public" / "models3d"
+            polyfork.backfill_thumbnails(folder)  # no-op once every model has its .png
             rows = []
             for p in folder.glob("*.glb") if folder.exists() else []:
                 side = p.with_name(p.name + ".json")

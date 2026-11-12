@@ -452,9 +452,10 @@ export default function App() {
           <button type="submit" disabled={!scrapeUrl.trim()}>Grab</button>
         </form>
       </div>
-      {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className="fx asset">
-        {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : c.preview_url && c.preview_url !== c.url ? <img src={c.preview_url} alt="" loading="lazy" className="model-thumb" /> : <div className="model-preview">3D · GLB</div>}
-        <span title={`${c.title} · ${c.author} · ${c.source_page}`}>{c.title}</span><small>{c.license}</small><button onClick={() => importMedia(c)}>Import</button>
+      {!!searchResults.length && <div className="grid assets search-results">{searchResults.map((c) => <article key={`${c.kind}:${c.url}`} className={`fx asset${c.kind === 'model' ? ' model-result' : ''}`} title={`${c.title} · ${c.license}`}>
+        {c.kind === 'image' ? <img src={c.preview_url} alt="" loading="lazy" /> : c.kind === 'video' ? <video src={c.url} poster={c.preview_url} muted preload="metadata" /> : c.preview_url && c.preview_url !== c.url ? <img src={c.preview_url} alt="" loading="lazy" className="model-thumb" /> : <div className="model-preview"><svg className="model-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7z M3 7l9 5 9-5 M12 12v10" /></svg></div>}
+        {c.kind === 'model' ? <button className="import-icon" onClick={() => importMedia(c)} aria-label={`Import ${c.title}`}>+</button>
+          : <><span title={`${c.title} · ${c.author} · ${c.source_page}`}>{c.title}</span><small>{c.license}</small><button onClick={() => importMedia(c)}>Import</button></>}
       </article>)}</div>}
       <div className="grid assets" onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}>
@@ -496,7 +497,7 @@ export default function App() {
           </div>
         ))}
       </div>
-      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip model-tile" {...tileProps({ type: 'model', url: m.url, name: m.name, license: m.license, source: m.source })}>{m.thumbnail ? <img src={m.thumbnail} alt={m.name} loading="lazy" /> : <div className="model-preview">3D · GLB</div>}<span>{m.name}</span><small>{m.license}</small></div>)}</div></>}
+      {!!models.length && <><h3>3D models</h3><div className="clips">{models.map((m) => <div key={m.url} className="clip model-tile" {...tileProps({ type: 'model', url: m.url, name: m.name, license: m.license, source: m.source })}>{m.thumbnail ? <img src={m.thumbnail} alt={m.name} loading="lazy" /> : <div className="model-preview"><svg className="model-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7z M3 7l9 5 9-5 M12 12v10" /></svg></div>}</div>)}</div></>}
       <p className="tip">Drag an image or clip onto a storyboard card or the inspector's Media box. The same asset can go on several segments.</p>
     </>
   )

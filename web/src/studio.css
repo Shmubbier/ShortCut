@@ -203,3 +203,9 @@
 .hero-style { display: flex; flex-direction: column; gap: 6px; border-top: 1.5px dashed var(--ink); padding-top: 10px; }
 .hero-style input { border: 1.5px solid var(--ink); border-radius: 8px; padding: 7px 10px; font: inherit; background: var(--paper); }
 .hero-style button { border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 8px; padding: 7px 14px; font-weight: 700; }
+
+/* 3D models: thumbnail only (name on hover); no thumbnail -> cube icon; search results import with a + */
+.model-tile { padding: 4px; }
+.model-preview .model-icon { width: 40%; height: 40%; fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linejoin: round; }
+.fx.asset.model-result { position: relative; }
+.import-icon { position: absolute; right: 8px; bottom: 8px; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 18px; line-height: 1; padding: 0; }

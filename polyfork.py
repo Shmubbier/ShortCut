@@ -148,6 +148,25 @@ def resolve(query: str, cls: str | None = None, want: str = "", deadline: float 
     return info
 
 
+def backfill_thumbnails(store: Path = STORE) -> None:
+    """Fetch Polyfork's rendered preview for any stored GLB without a .png (models cached before thumbnails existed)."""
+    def fetch(glb: Path):
+        side = glb.with_name(glb.name + ".json")
+        meta = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
+        source = str(meta.get("source", ""))
+        if not source.startswith(BASE + "/asset/"):
+            return
+        asset = source.rsplit("/", 1)[-1]  # remixes use their base asset's render
+        try:
+            glb.with_suffix(".png").write_bytes(_get(f"{BASE}/files/{urllib.parse.quote(asset)}/renders/hero.png"))
+        except Exception as e:
+            print("thumbnail backfill failed:", glb.name, repr(e)[:100])
+    missing = [g for g in store.glob("*.glb") if not g.with_suffix(".png").exists()] if store.exists() else []
+    if missing:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(fetch, missing))
+
+
 if __name__ == "__main__":  # offline self-check of the strict matcher
     m = lambda title, q, full=False: _match({"title": title, "_full": full}, q)
     assert _head(_terms("Basket of Humitas")) == "basket" and _head(_terms("Ice Axe and Crampon Set")) == "axe"
