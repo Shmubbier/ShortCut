@@ -31,6 +31,7 @@ from urllib.parse import unquote, urljoin, urlparse
 
 from pydantic import BaseModel
 
+import content_styles as cstyles
 import music
 import tts
 
@@ -108,7 +109,9 @@ MusicId = Literal[tuple(MUSIC_BY_ID)]  # type: ignore[valid-type]
 DIRECTION_GUIDE = """Visual + sound direction (the `direction` field):
 Styles: editorial = paper-magazine collage (explainers, culture, food, history, news);
 2d = flat bouncy motion graphics (playful, lifestyle, how-to, kids, upbeat brands);
-pixel = retro 8-bit (games, internet culture, nostalgia, tech); 3d = low-poly 3D props (games, products, objects, places).
+pixel = retro 8-bit (games, internet culture, nostalgia, tech); 3d = low-poly 3D props built live.
+PREFER 3d whenever the topic centres on concrete things that can be modelled: food, products, gadgets, animals, vehicles,
+buildings and landmarks, game characters or units, tools. Use editorial or 2d mainly for abstract, data-heavy or people-centred topics.
 Palettes: paper (cream, ink, red), ube (purples), jeepney (yellow, blue, red; Filipino street), pop (bright flat colours),
 night (dark, moody), arcade (dark retro neon), mono (black and white).
 Music library (id: title, mood, bpm):
@@ -118,6 +121,7 @@ you'd also consider (not repeating the pick), and say why in one short line each
 
 
 class Direction(BaseModel):
+    content_style: str  # id from content_styles (explainer, story, listicle, clip, tutorial, showcase, news, comedy, documentary or a custom id)
     style: StyleId
     palette: PaletteId
     style_alternatives: list[StyleId]
@@ -149,7 +153,8 @@ def direction_fields(d: Direction, volume: float = 0.5) -> dict:
     """Claude's picks -> plan fields; the runners-up become the recommendations shown in the editor."""
     alts = [x for x in d.style_alternatives if x != d.style][:2]
     malts = [x for x in d.music_alternatives if x != d.music][:3]
-    return {"style": d.style, "theme": {"palette": d.palette}, "styleOptions": [d.style, *alts], "styleWhy": d.style_why,
+    content = d.content_style if cstyles.get_style(d.content_style) else "explainer"
+    return {"contentStyle": content, "style": d.style, "theme": {"palette": d.palette}, "styleOptions": [d.style, *alts], "styleWhy": d.style_why,
             "music": {**MUSIC_BY_ID[d.music], "volume": volume}, "musicOptions": [d.music, *malts], "musicWhy": d.music_why}
 
 
@@ -277,6 +282,68 @@ def context(plan: dict, full_prop_index=None) -> str:
     return json.dumps({"title": plan["title"], "direction": current, "scenes": scenes}, ensure_ascii=False)
 
 
+class PropFix(BaseModel):
+    index: int  # segment index of the prop being fixed
+    prop_json: str  # the corrected recipe as a JSON string
+
+
+class PropFixes(BaseModel):
+    fixes: list[PropFix]
+
+
+VALIDATOR = ROOT / "web" / "src" / "video" / "bench3d" / "validate.mts"
+
+
+def validate_props(scenes: list) -> list[dict]:
+    """Build every scene's prop with the renderer's own builder (node + Manifold). [{ok, error?, tris?}] per scene."""
+    props = [sc.get("prop") or None for sc in scenes]
+    if not any(props):
+        return [{"ok": True, "skipped": True} for _ in props]
+    try:
+        r = subprocess.run(["node", str(VALIDATOR)], input=json.dumps(props), capture_output=True, text=True,
+                           encoding="utf-8", timeout=90, cwd=str(ROOT / "web"))
+        return json.loads(r.stdout)
+    except Exception as e:  # validator unavailable: don't block the plan, the editor still flags broken props
+        print("prop validation skipped:", repr(e)[:200])
+        return [{"ok": True, "skipped": True} for _ in props]
+
+
+def ensure_props(scenes: list) -> tuple[list, str]:
+    """AI-written 3D props often fail to build (unknown ops, empty booleans). Validate, give the AI one repair pass with
+    the exact errors, re-validate, and drop whatever is still broken so no segment shows an empty 3D stage."""
+    results = validate_props(scenes)
+    bad = [(i, r.get("error", "")) for i, r in enumerate(results) if not r.get("ok")]
+    if not bad:
+        return scenes, ""
+    scenes = [dict(sc) for sc in scenes]
+    fixed = 0
+    try:
+        listing = "\n\n".join(f"Segment {i} ({scenes[i]['prop'].get('name', 'prop')}): ERROR {err}\n{json.dumps(scenes[i]['prop'])}" for i, err in bad)
+        fixes = ask(f"""These low-poly 3D prop recipes failed to build. Fix each one so it builds, keeping the same idea and look.
+Use only the vocabulary below. Return one fix per failing segment index.
+
+{PROP_GUIDE}
+
+FAILING RECIPES:
+{listing}""", PropFixes)
+        for f in fixes.fixes:
+            if any(f.index == i for i, _ in bad):
+                try:
+                    scenes[f.index]["prop"] = json.loads(f.prop_json)
+                except json.JSONDecodeError:
+                    pass
+        recheck = validate_props(scenes)
+        still = {i for i, r in enumerate(recheck) if not r.get("ok")}
+        fixed = len([i for i, _ in bad if i not in still])
+    except Exception as e:
+        print("prop repair failed:", repr(e)[:200])
+        still = {i for i, _ in bad}
+    for i in still:
+        scenes[i]["prop"] = None
+    note = f" 3D props: repaired {fixed} that failed to build" + (f", dropped {len(still)} that couldn't be fixed." if still else ".")
+    return scenes, note
+
+
 def to_scene(s: Scene, old: dict | None = None) -> dict:
     """Claude's segment -> stored segment: stable id, parsed prop, and voice audio kept only if the line didn't change."""
     old = old or {}
@@ -346,8 +413,16 @@ def generate(topic: str, meta: dict, mode: str, body: dict) -> dict:
     notes = research(topic) if mode == "api" else ""  # the CLI path researches with Claude Code's own web search
     fmt = "vertical short-form reel" if meta["aspect"] in ("9:16", "4:5") else "horizontal video"
     look = "a visual style you choose (see direction below)" if meta["style"] == "auto" else f"the {meta['style']} visual style"
-    s = ask(f"""Plan a {meta['pace']}-paced {fmt} ({meta['aspect']}, 6-8 segments) in {look}.
+    content = body.get("content") or "auto"
+    chosen = cstyles.get_style(content)
+    seg = (chosen or {}).get("segments", [6, 8])
+    pref = (chosen or {}).get("visual") or {}
+    hint = (f"\nThis content style prefers the {pref['style']} visual style" + (f" and the {pref['palette']} palette" if pref.get("palette") else "")
+            + " unless the topic clearly needs another.") if pref.get("style") and meta["style"] == "auto" else ""
+    s = ask(f"""Plan a {meta['pace']}-paced {fmt} ({meta['aspect']}, {seg[0]}-{seg[1]} segments) in {look}.
 Topic / brief: {topic}
+
+{cstyles.style_brief(content)}{hint}
 
 Research notes (may be empty; prefer concrete facts and numbers from here):
 {notes or '(none)'}
@@ -355,12 +430,15 @@ Research notes (may be empty; prefer concrete facts and numbers from here):
 {EDITING_GUIDE}
 {bucket_text(body.get('assets', []))}
 {style_text(meta['style'])}
-Hook in the first segment, payoff in the last. Headlines short and punchy. No hashtags, no emojis.""", Script, research=True)
+Follow the content style's structure (the hook and payoff take the form it describes). Headlines short. No hashtags, no emojis.""", Script, research=True)
     d = s.direction
     if meta["style"] != "auto":  # respect a style the user picked even if the model drifted
         d = d.model_copy(update={"style": meta["style"]})
-    return {"title": s.title, **meta, **direction_fields(d), "scenes": [to_scene(x) for x in s.scenes],
-            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why})"}
+    if chosen:
+        d = d.model_copy(update={"content_style": chosen["id"]})
+    scenes, prop_note = ensure_props([to_scene(x) for x in s.scenes])
+    return {"title": s.title, **meta, **direction_fields(d), "scenes": scenes,
+            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why}){prop_note}"}
 
 
 def edit(body: dict) -> dict:
@@ -382,7 +460,8 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
 (for an unchanged 3D prop, return prop_json "keep").""", SceneEdit)
         scenes = [*plan["scenes"]]
         scenes[i] = to_scene(e.scene, scenes[i])
-        return {"plan": {**plan, "scenes": scenes}, "note": e.note}
+        scenes, prop_note = ensure_props(scenes)
+        return {"plan": {**plan, "scenes": scenes}, "note": e.note + prop_note}
     s = ask(f"""Current video plan:
 {context(plan)}
 
@@ -394,13 +473,16 @@ Write prop_json only if direction.style is 3d (otherwise "").
 
 Apply this instruction to the video: "{instr}"
 Leave segments the instruction doesn't concern exactly as they are (prop_json "keep" for unchanged props).
-Keep the current direction (style, palette, music) unless the instruction asks to change the look or the music.
+Keep the current direction (content style, visual style, palette, music) unless the instruction asks to change them
+(e.g. "make it a story" changes direction.content_style and rewrites the script to that style).
+{cstyles.style_brief(plan.get("contentStyle") or "explainer")}
 Add, remove or reorder segments only if asked.""", Script)
     # Match returned segments to old ones by position so ids/audio survive; new segments get new ids.
     old = plan["scenes"]
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
     vol = (plan.get("music") or {}).get("volume", 0.5)
-    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note}
+    scenes, prop_note = ensure_props(scenes)
+    return {"plan": {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}, "note": s.note + prop_note}
 
 
 SAMPLES = ROOT / "samples"
@@ -947,6 +1029,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({"engines": engines, "voices": (["qwen:ryan", "qwen:serena", "qwen:vivian"] if engines["qwen"] else [])}, 200)
         if self.path == "/api/assets":
             return self.reply(list_assets(), 200)
+        if self.path == "/api/styles":
+            return self.reply(cstyles.list_styles(), 200)
         if self.path == "/api/music":
             return self.reply(MUSIC, 200)
         if self.path.startswith("/api/render/"):
