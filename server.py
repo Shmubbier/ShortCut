@@ -32,6 +32,7 @@ from urllib.parse import unquote, urljoin, urlparse
 from pydantic import BaseModel
 
 import music
+import tts
 
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
@@ -57,6 +58,7 @@ typewriter (letters type on), highlight (marker swipe under headline), vignette 
 Edit like a human editor: vary transitions, save shake/flash for the biggest beats, don't repeat the same effect back to back.
 Every segment also has `purpose` (one line: what this beat does for the viewer) and `voiceover` (what the narrator says
 over it: natural spoken sentences, 8-30 words, adds to the on-screen text instead of reading it out).
+Write `delivery` as a short speaking note for each segment (for example, “warm, slower” or “punchy, excited”).
 `importance` sets how long a beat lingers: 3 = key beat (the hook, the biggest number, the payoff; give it room),
 2 = normal, 1 = quick connective beat (keep it brisk). Most segments are 2; use 3 for at most a third of them.
 Match line length to importance: key beats can carry a longer voiceover, quick beats a short one.
@@ -90,6 +92,7 @@ class Scene(BaseModel):
     asset: str  # an asset url from the bucket, or ""
     purpose: str
     voiceover: str
+    delivery: str = ""
     importance: Literal[1, 2, 3]  # 1 quick, 2 normal, 3 key beat: scales how long the segment holds
     title: str  # 2-4 word segment name for the storyboard card, e.g. "The hook", "Price shock"
     role: Literal["footage", "image", "narration", "title", "broll"]  # content type; keep in sync with ROLES in Video.tsx
@@ -479,36 +482,20 @@ def whisper():
 
 
 async def _tts(text: str, voice: str, path: Path, rate: int = 0) -> list:
-    import edge_tts
-
-    words, audio = [], bytearray()
-    async for ch in edge_tts.Communicate(text, voice, rate=f"{rate:+d}%", boundary="WordBoundary").stream():
-        if ch["type"] == "audio":
-            audio += ch["data"]
-        elif ch["type"] == "WordBoundary":  # offsets are in 100 ns ticks
-            start = ch["offset"] / 1e7
-            words.append({"text": ch["text"], "start": round(start, 2), "end": round(start + ch["duration"] / 1e7, 2)})
-    path.write_bytes(audio)
-    return words
+    return await tts._edge(text, voice, path, rate)
 
 
 def speak(text: str, voice: str, rate: int = 0) -> tuple[str, Path, list]:
-    """Edge TTS -> mp3 + its own word timings, cached by (voice, text) so re-voicing unchanged lines is free."""
-    key = hashlib.sha1(f"{voice}|{rate}|{text}".encode()).hexdigest()[:12]
-    path, timing = MEDIA / f"vo-{key}.mp3", MEDIA / f"vo-{key}.json"
-    if not (path.exists() and timing.exists()):
-        for attempt in (1, 2):  # the free Edge voice service drops the odd connection; one retry covers it
-            try:
-                timing.write_text(json.dumps(asyncio.run(_tts(text, voice, path, rate))))
-                break
-            except Exception:
-                if attempt == 2:
-                    raise
-    return f"/media/{path.name}", path, json.loads(timing.read_text())
+    """Backward-compatible Edge entry point; new voices use the unified adapter below."""
+    path, words = tts.synthesize(text, voice, rate=rate)
+    return f"/media/{path.name}", path, words
 
 
 def captions(path: Path, voice: str, tts_words: list) -> tuple[list, str]:
     """Whisper word timestamps; falls back to the TTS engine's own timings if the model isn't available."""
+    aligned = tts.scribe_words(path)
+    if aligned:
+        return aligned, "scribe_v2"
     try:
         segs, _ = whisper().transcribe(str(path), word_timestamps=True, language="tl" if voice.startswith("fil-") else "en")
         words = [{"text": w.word.strip(), "start": round(w.start, 2), "end": round(w.end, 2)}
@@ -526,7 +513,10 @@ def captions(path: Path, voice: str, tts_words: list) -> tuple[list, str]:
 
 def voice(body: dict) -> dict:
     plan, i = body["plan"], body.get("index")
+    load_env()
     v = plan.get("voice") or DEFAULT_VOICE
+    if not plan.get("voice") and tts.engine_status()["qwen"]:
+        v = "qwen:ryan"
     rate = max(-50, min(50, int(plan.get("voiceRate", 0))))
     scenes = [*plan["scenes"]]
     for k in ([i] if i is not None else range(len(scenes))):
@@ -534,10 +524,15 @@ def voice(body: dict) -> dict:
         if not line:
             scenes[k] = {**scenes[k], "audio": None, "words": []}
             continue
-        url, path, tts_words = speak(line, v, rate)
+        path, tts_words = tts.synthesize(line, v, scenes[k].get("delivery", ""), rate)
+        url = f"/media/{path.name}"
         words, source = captions(path, v, tts_words)
-        # Edge TTS mp3 is 48 kbit/s CBR, so size gives the exact length without decoding.
-        duration = round(path.stat().st_size * 8 / 48_000, 2)
+        if path.suffix == ".wav":
+            import wave
+            with wave.open(str(path), "rb") as audio_file:
+                duration = round(audio_file.getnframes() / audio_file.getframerate(), 2)
+        else:
+            duration = round(path.stat().st_size * 8 / 48_000, 2)
         scenes[k] = {**scenes[k], "audio": {"url": url, "duration": duration}, "words": words, "captionSource": source}
     return {"plan": {**plan, "scenes": scenes}}
 
@@ -947,6 +942,9 @@ ROUTES = {"/api/plan": create, "/api/edit": edit, "/api/voice": voice, "/api/ass
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == "/api/voices":
+            engines = tts.engine_status()
+            return self.reply({"engines": engines, "voices": (["qwen:ryan", "qwen:serena", "qwen:vivian"] if engines["qwen"] else [])}, 200)
         if self.path == "/api/assets":
             return self.reply(list_assets(), 200)
         if self.path == "/api/music":

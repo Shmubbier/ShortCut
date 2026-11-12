@@ -20,7 +20,7 @@ export const isEmpty = (s: SceneData) => !s.headline?.trim() && !s.voiceover?.tr
 export type SceneData = {
   id: string; kind: Kind; headline: string; sub: string; value: string; transition: Transition; effects: Effect[]
   asset?: string; prop?: Recipe | null; role?: Role; media?: Media | null; title?: string
-  purpose?: string; voiceover?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts'
+  purpose?: string; voiceover?: string; delivery?: string; importance?: Importance; length?: number | null; audio?: { url: string; duration: number } | null; words?: Word[]; captionSource?: 'whisper' | 'tts' | 'scribe_v2'
 }
 export type Plan = {
   title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; captionStyle?: CaptionStyle; voice?: string; voiceRate?: number

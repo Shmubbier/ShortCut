@@ -149,6 +149,8 @@ export function StylePanel({ plan, change, snapshot, tileProps }: Edit & { tileP
 
 export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport, onRender, renderUrl }: Edit & { voice: (i: number | null) => void; busy: string; onExport: () => void; onRender: () => void; renderUrl: string }) {
   const voiced = plan.scenes.filter((s) => s.audio).length
+  const [qwenVoices, setQwenVoices] = useState<string[]>([])
+  useEffect(() => { fetch('/api/voices').then(r => r.ok ? r.json() : null).then(d => setQwenVoices(d?.voices ?? [])).catch(() => {}) }, [])
   return (
     <>
       <label>Title<input value={plan.title} onChange={(e) => change({ ...plan, title: e.target.value })} /></label>
@@ -161,7 +163,7 @@ export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport, o
       <h3>Voiceover</h3>
       <label>Narrator
         <select value={plan.voice ?? VOICES[0][0]} onChange={(e) => { snapshot(); change({ ...plan, voice: e.target.value }) }}>
-          {VOICES.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          {[...VOICES.map(([id, name]) => [id, name] as const), ...qwenVoices.map(id => [id, `${id.split(':')[1]} · natural (Qwen)`] as const)].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
       </label>
       <button onClick={() => voice(null)} disabled={!!busy}>{busy === 'voice-all' ? 'Voicing…' : `Voice all segments (${voiced}/${plan.scenes.length} done)`}</button>
