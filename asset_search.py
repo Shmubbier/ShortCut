@@ -61,7 +61,10 @@ def _commons(q, kind, limit):
 def _openverse(q, kind, limit):
     endpoint = "images" if kind == "image" else "audio" if kind == "video" else None
     if not endpoint: return []
-    data=_json("https://api.openverse.org/v1/"+endpoint+"/?"+urllib.parse.urlencode({"q":q,"page_size":limit*2}))
+    # Only licences that allow modification (cropping/editing into a video is a derivative: no ND), no mature results.
+    # Anonymous Openverse is slow and rate-limited, hence the longer timeout and one request per search (see search()).
+    args={"q":q,"page_size":limit*2,"license_type":"modification","mature":"false"}
+    data=_json("https://api.openverse.org/v1/"+endpoint+"/?"+urllib.parse.urlencode(args), timeout=14)
     out=[]
     for x in data.get("results",[]):
         u=x.get("url",""); typ=(x.get("filetype") or u.rsplit(".",1)[-1]).lower()
@@ -134,7 +137,7 @@ def search(query, kinds=("image","video","model"), limit=8):
         if kind not in ("image","video","model"): continue
         for variant in variants:
             tasks.append((kind,"Wikimedia",lambda v=variant,k=kind:_commons(v,k,limit)))
-            tasks.append((kind,"Openverse",lambda v=variant,k=kind:_openverse(v,k,limit)))
+            if variant==q: tasks.append((kind,"Openverse",lambda v=variant,k=kind:_openverse(v,k,limit)))
             if kind in ("image","video"): tasks.append((kind,"NASA",lambda v=variant,k=kind:_nasa(v,k,limit)))
             if kind=="image": tasks.append((kind,"DuckDuckGo",lambda v=variant:_ddg(v,limit)))
             if kind=="model" and variant==q: tasks.append((kind,"Polyfork",lambda v=variant:_polyfork(v,limit)))
