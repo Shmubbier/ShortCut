@@ -1,5 +1,11 @@
 # Shot pipeline report
 
+## Round 2 progress
+
+- Step 1 implementation: six-frame proofs now write `proof.json` and print per-check PASS/FAIL lines for overlap/title-safe zone, floor grounding, paper background ΔE76, and in-frame bounds. Finals require a passing, matching proof; `--force` is the explicit override.
+- Proof gate exercise on the unmodified hero: **24/28 checks passed**; four text/object overlap checks failed. Grounding passed on all six frames; background dE76 ranged 1.20–1.29; all objects were in frame. A final attempt was correctly blocked (exit 1) before render.
+- Step 1 renders/checks took 3.34 s for six proof frames (after scene startup); gate test took 0.76 s. Per-shot corrections and final timings will be added under subsequent step sections.
+
 ## What works
 
 - `shots/render_shot.py` reads the documented JSON spec, builds a Blender EEVEE scene, imports GLB props or creates Blender primitives, animates camera/object keyframes, lights and exact-time text overlays.
