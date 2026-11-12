@@ -24,9 +24,12 @@ if aspect:
     W, H = ASPECTS[aspect]
 else:
     W, H = map(int, S["resolution"])
+contract_resolution = [W, H]
 effective_aspect = aspect or (f"{W}:{H}")
-if draft and mode == "final":
-    W, H = W // 2, H // 2
+render_percentage = 25 if mode == "proof" else 50 if draft else 100
+movie_w = W * (render_percentage // 100) if render_percentage == 100 else W * render_percentage // 100
+movie_h = H * (render_percentage // 100) if render_percentage == 100 else H * render_percentage // 100
+movie_w -= movie_w % 2; movie_h -= movie_h % 2
 fps, duration = int(S.get("fps", 30)), float(S["duration"])
 frames = round(fps * duration)
 proof_hash = hashlib.sha256(spec_path.read_bytes()).hexdigest()
@@ -35,7 +38,7 @@ if mode == "final" and not force:
     if not proof_file.is_file():
         raise SystemExit("Final blocked: no proof.json found; run --proof first or pass --force")
     saved = json.loads(proof_file.read_text(encoding="utf-8"))
-    if not saved.get("passed") or saved.get("spec_sha256") != proof_hash or saved.get("aspect") != effective_aspect or saved.get("resolution") != [W, H]:
+    if not saved.get("passed") or saved.get("spec_sha256") != proof_hash or saved.get("aspect") != effective_aspect or saved.get("resolution") != contract_resolution:
         raise SystemExit("Final blocked: the matching proof failed or is stale; fix the spec and rerun --proof, or pass --force")
 
 def lin(hexstr, alpha=1):
@@ -69,7 +72,8 @@ def at(keys, t):
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc=bpy.context.scene; sc.render.engine="BLENDER_EEVEE"
 sc.render.resolution_x=W; sc.render.resolution_y=H
-sc.render.resolution_percentage=25 if mode=="proof" else 50 if draft else 100
+sc.render.resolution_percentage=render_percentage
+sc.eevee.taa_render_samples=4 if mode=="proof" else 8
 sc.render.fps=fps; sc.render.image_settings.file_format="PNG"; sc.render.image_settings.color_mode="RGB"
 sc.render.film_transparent=False; sc.view_settings.view_transform="Standard"
 paper=S.get("background", "#f3ece0")
@@ -160,13 +164,15 @@ if mode=="proof":
     result=subprocess.run(["node","-e",js,str(frame_dir),str(sheet)],cwd=str(ROOT/"web"),capture_output=True,text=True)
     if result.returncode: raise RuntimeError("contact sheet failed: "+result.stderr)
     passed=all(c["status"]=="PASS" for c in all_checks)
-    proof={"passed":passed,"spec":str(spec_path.relative_to(ROOT)),"spec_sha256":proof_hash,"aspect":effective_aspect,"resolution":[W,H],"fps":fps,"frames":sample_frames,"elapsed_s":round(elapsed,3),"checks":all_checks}
+    proof={"passed":passed,"spec":str(spec_path.relative_to(ROOT)),"spec_sha256":proof_hash,"aspect":effective_aspect,"resolution":contract_resolution,"proof_render_size":[round(contract_resolution[0]*.25),round(contract_resolution[1]*.25)],"fps":fps,"frames":sample_frames,"elapsed_s":round(elapsed,3),"checks":all_checks}
     proof_file.write_text(json.dumps(proof,indent=2),encoding="utf-8")
     for c in all_checks: print(f'{c["status"]}: frame={c["frame"]} t={c["time"]:.3f}s {c["name"]}: {c["detail"]}')
     print(("PASS" if passed else "FAIL")+f": proof overall ({sum(c['status']=='PASS' for c in all_checks)}/{len(all_checks)} checks); {elapsed:.2f}s; {sheet}; {proof_file}")
 else:
     movie=out/(spec_path.stem+".mp4")
     ffmpeg=ROOT/"web"/"node_modules"/"@remotion"/"compositor-win32-x64-msvc"/"ffmpeg.exe"
-    encoder=subprocess.run([str(ffmpeg),"-y","-framerate",str(fps),"-i",str(frame_dir/"%05d.png"),"-c:v","libx264","-pix_fmt","yuv420p",str(movie)],cwd=str(ROOT/"web"),capture_output=True,text=True)
+    # H.264 4:2:0 needs even pixel dimensions; the half-size 4:5 draft is 540×675,
+    # so trim one row during encode to keep broad yuv420p playback compatibility.
+    encoder=subprocess.run([str(ffmpeg),"-y","-framerate",str(fps),"-i",str(frame_dir/"%05d.png"),"-vf","scale=trunc(iw/2)*2:trunc(ih/2)*2","-c:v","libx264","-pix_fmt","yuv420p",str(movie)],cwd=str(ROOT/"web"),capture_output=True,text=True)
     if encoder.returncode: raise RuntimeError("Remotion FFmpeg encode failed: "+encoder.stderr[-3000:])
-    print(f"PASS: final rendered {len(list(sample_frames))} frames in {elapsed:.2f}s; encoded {movie} ({movie.stat().st_size} bytes)")
+    print(f"PASS: final rendered {len(list(sample_frames))} frames at {movie_w}x{movie_h} (contract {W}x{H}; {render_percentage}%) in {elapsed:.2f}s; encoded {movie} ({movie.stat().st_size} bytes)")

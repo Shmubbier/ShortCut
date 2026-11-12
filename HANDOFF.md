@@ -51,6 +51,8 @@ so Filipino voices stay on Edge TTS.
 - **Shot proof layout fixes (round 2, step 2):** hero-orbit, reveal-rise, and flyby specs now all pass automated proof (34/34, 34/34,
   90/90 respectively); passing proof sheets replace the initial thumbnails in `shots/library/README.md`. Round counts and measured
   proof timings are recorded in `briefs/shots.report.md`.
+- **Shot formats (round 2, step 3):** scene runner supports 9:16, 16:9, 1:1 and 4:5 at 30 fps plus half-size draft rendering. All
+  hero aspect proofs and draft MP4s passed metadata checks; the full 1080×1920 hero took 111.44 s end to end. Details in the report.
 
 - Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
 - Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover

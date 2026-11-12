@@ -13,6 +13,13 @@
 - **flyby:** 2 proof rounds; **90/90 PASS**, final check time 6.373 s. Round 1 found the title outside the safe region; moving it down in the spec cleared all checks. All three props have lowest z=0.000 m.
 - All proofs used 30 fps, 1920×1080 specs. Refreshed passing contact sheets are in the library README. All background samples are ΔE76≤3 (final successful run: 0.000 for hero/flyby; 0.000 on reveal's final JSON).
 
+### Step 3: app aspect sizes and drafts
+
+- Hero proof rounds for aspect coverage: **2**. First exposed portrait title/object crop and 4:5 title overflow; reducing the hero scale and font size in the spec made 9:16, 16:9, 1:1, and 4:5 all pass **34/34**. Each run rendered six proof frames at 30 fps; check times were approximately 3.6–4.1 s.
+- Encoded and probed 10-second 30 fps half-resolution MP4s for all four aspect contracts: 540×960 (9:16, 57.89 s), 960×540 (16:9, 51.29 s), 540×540 (1:1, 44.87 s), and 540×674 (4:5, 45.91 s). H.264 4:2:0 requires even dimensions, so the odd 675-pixel 4:5 draft height loses one bottom row during encode. Full-size 1080×1350 remains exact.
+- **Required hero final:** 300 frames at 1080×1920 / 30 fps. Blender frame render: **106.82 s**; complete command including startup and H.264 encode: **111.44 s**. Output `shots/out/hero-final-9x16/hero-orbit.mp4`, 670,613 bytes, probed as exactly 10.00 s H.264, 1080×1920, 30 fps.
+- A preliminary draft test exposed a double-halving bug and failed 4:5 H.264 encoding. Both were corrected before the successful matrix above: `--draft` now sets Blender's 50% percentage against the full contract dimensions, and encoding trims only the odd 4:5 draft row.
+
 ## What works
 
 - `shots/render_shot.py` reads the documented JSON spec, builds a Blender EEVEE scene, imports GLB props or creates Blender primitives, animates camera/object keyframes, lights and exact-time text overlays.
