@@ -2,6 +2,25 @@
 
 How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things stand** and **what to do next**.
 
+## Director board (Nov 12, from 10:30): Claude Code directs, Codex builds in parallel
+
+Codex tasks run headless via `briefs/run_codex.sh <task> <api_port> <ui_port>`, each in its own worktree under
+`../ManilaHack-wt/<task>` on branch `codex/<task>`. Briefs: `briefs/COMMON.md` + `briefs/<task>.md`. Logs and final messages:
+`briefs/logs/`. Reports: `briefs/<task>.report.md`. The director reviews and merges into `main`.
+
+| Task | Owner | Branch | Status |
+|---|---|---|---|
+| Natural voices: speech.cpp + Qwen3-TTS, delivery notes, optional Scribe v2 | Codex | `codex/voice` | running |
+| Asset search: images, video clips, 3D models, with licences | Codex | `codex/assets` | running |
+| YouTube link → reusable style (type, writing, editing) | Codex | `codex/youtube-style` | running |
+| Blender shot pipeline (exact timing + easing), 10 s test shot, scene library with prompts | Codex | `codex/shots` | running |
+| Content styles (story, listicle, clip, tutorial, showcase, news, comedy, explainer, documentary) | Claude | `main` | done (a0ae38e) |
+| 3D: stronger 3D bias, server-side prop validation + one AI repair pass | Claude | `main` | done (1040909) |
+
+Research notes: "reanimate" is a Haskell SVG library, so Blender's Python API is used for scripted 3D shots. Remotion is the
+bundled After Effects replacement. Scribe v2 is a paid ElevenLabs API (optional, key-gated). speech.cpp's Qwen3-TTS has no Filipino,
+so Filipino voices stay on Edge TTS.
+
 ## Working today (all on `main`, verified in the browser or with real generations)
 
 | Feature | Where | Verified |
