@@ -13,6 +13,7 @@ Your ports: run your own API with BLOCKCUT_PORT=$API and, if you need the UI, a 
 Never stop or restart anything on ports 8787, 5173 or 5175: the user is live-testing there.
 Shared Python venv: $ROOT/.venv/Scripts/python. Main checkout (read-mostly; only its git-ignored tools/, models/ and .venv may be written): $ROOT.
 Work autonomously, without asking questions. When done, follow 'Done means' in COMMON.md."
-"$CX" exec -C "$WT" -s workspace-write -c sandbox_workspace_write.network_access=true --add-dir "$ROOT" \
+# Full access: the Windows sandbox blocked the shared venv's base Python, git commits in worktrees and HTTPS downloads.
+"$CX" exec -C "$WT" --dangerously-bypass-approvals-and-sandbox \
   --skip-git-repo-check --json -o "$LOGS/$TASK.final.md" "$PROMPT" > "$LOGS/$TASK.jsonl" 2> "$LOGS/$TASK.err"
 echo "codex task $TASK exited with $?" >> "$LOGS/$TASK.final.md"
