@@ -1,0 +1,14 @@
+{
+  "duration": 6, "fps": 24, "resolution": [960, 540], "background": "#f3ece0",
+  "camera": {"keyframes": [
+    {"t":0,"position":[0,-7,3.8],"look_at":[0,0,0],"fov":44,"easing":"easeInOutCubic"},
+    {"t":6,"position":[0,-6,2.8],"look_at":[0,0,0],"fov":40,"easing":"linear"}
+  ]},
+  "objects": [{"name":"Rising ceramic orb","primitive":"icosphere","position":[0,0,-1.0],"scale":[1.3,1.3,1.3],"color":"#c46f4b","keyframes":[
+    {"t":0,"position":[0,0,-1.0],"rotation":[0,0,0],"scale":[1.3,1.3,1.3],"easing":"easeOutBack"},
+    {"t":2.4,"position":[0,0,0.1],"rotation":[0,0,0],"scale":[1.3,1.3,1.3],"easing":"easeInOutCubic"},
+    {"t":6,"position":[0,0,0.1],"rotation":[0,0,0],"scale":[1.3,1.3,1.3]}
+  ]}],
+  "lights": [{"position":[-4,-5,8],"energy":1250,"size":5}],
+  "text": [{"body":"A NEW DAY RISES","in":1,"out":6,"position":[0.08,0.15],"size":0.5,"color":"#42352b"}]
+}

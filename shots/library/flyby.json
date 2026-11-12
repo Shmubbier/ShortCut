@@ -1,0 +1,14 @@
+{
+  "duration": 6, "fps": 24, "resolution": [960, 540], "background": "#f3ece0",
+  "camera": {"keyframes": [
+    {"t":0,"position":[-5,-8,2.6],"look_at":[0,0,0],"fov":43,"easing":"easeInOutCubic"},
+    {"t":6,"position":[5,-8,2.6],"look_at":[0,0,0],"fov":43,"easing":"linear"}
+  ]},
+  "objects": [
+    {"name":"Amber","primitive":"icosphere","position":[-2,0,0],"scale":[0.9,0.9,0.9],"color":"#c46f4b"},
+    {"name":"Sage","primitive":"icosphere","position":[0,0,0],"scale":[0.9,0.9,0.9],"color":"#75886b"},
+    {"name":"Gold","primitive":"icosphere","position":[2,0,0],"scale":[0.9,0.9,0.9],"color":"#d5a74d"}
+  ],
+  "lights": [{"position":[-4,-5,8],"energy":1300,"size":5}],
+  "text": [{"body":"FORM IN MOTION","in":0.5,"out":6,"position":[0.08,0.15],"size":0.5,"color":"#42352b"}]
+}

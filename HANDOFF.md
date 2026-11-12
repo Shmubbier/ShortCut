@@ -23,6 +23,10 @@ How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things sta
 
 ## Recently landed
 
+- **Scripted Blender shot pipeline (Codex `codex/shots`):** standalone JSON camera/object specs, proof contact sheets and final
+  EEVEE MP4 rendering. Three prompt/spec examples are in `shots/library/`; measured outputs and limitations are in
+  `briefs/shots.report.md`. Renders are reproducible on the portable Blender install and are git-ignored.
+
 - Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
 - Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover
   shows the cut-off warning, and "Use the voice's length" sets 10.0 s and clears it.
