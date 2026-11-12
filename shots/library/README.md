@@ -19,3 +19,15 @@ Select app output framing with `--aspect 9:16`, `--aspect 16:9`, `--aspect 1:1`,
 | **flyby** | Camera dolly past three grounded props in a row. Proof: 90/90 PASS, 30 fps. | [prompt](flyby.prompt.md) · [spec](flyby.json) | ![Passing flyby proof sheet](thumbs/flyby.png) |
 
 Generated proof frames, full-resolution PNG sequences and MP4s are in the git-ignored `shots/out/` directory. The contact sheet is deliberately low resolution; inspect the final MP4 for framing and movement.
+
+## API job
+
+The Blockcut API accepts a library key (or inline JSON spec) and renders in a background thread. A final job always runs the proof gate first; a failed proof leaves `video_url` empty. A completed final is copied into the footage store, so `/footage/<name>.mp4` can be assigned to a video segment.
+
+```powershell
+$body = '{"spec":"hero-orbit","mode":"final","aspect":"9:16"}'
+$job = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/shots/render -ContentType application/json -Body $body
+Invoke-RestMethod "http://127.0.0.1:8787/api/shots/jobs/$($job.id)"
+```
+
+Job responses include `status`, `stage`, `proof_url`, check counts/details, and `video_url` once the finished clip is saved.

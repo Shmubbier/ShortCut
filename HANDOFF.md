@@ -53,6 +53,9 @@ so Filipino voices stay on Edge TTS.
   proof timings are recorded in `briefs/shots.report.md`.
 - **Shot formats (round 2, step 3):** scene runner supports 9:16, 16:9, 1:1 and 4:5 at 30 fps plus half-size draft rendering. All
   hero aspect proofs and draft MP4s passed metadata checks; the full 1080×1920 hero took 111.44 s end to end. Details in the report.
+- **Shot API (round 2, step 4):** `POST /api/shots/render` starts proof/final work and `GET /api/shots/jobs/<id>` returns its stage,
+  proof/check results and footage URL. Tested at :8793: all 34 checks passed and an H.264 final was served from `/footage/` for
+  segment assignment. Details are in `briefs/shots.report.md`.
 
 - Card and inspector lengths show on-screen seconds (minus the 0.2 s transition overlap), so a fixed 2.0 s reads 2.0 s.
 - Browser-checked: a music recommendation chip switches the track (preview loads); a 1.5 s fixed length on a 9.7 s voiceover

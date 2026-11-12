@@ -20,6 +20,14 @@
 - **Required hero final:** 300 frames at 1080×1920 / 30 fps. Blender frame render: **106.82 s**; complete command including startup and H.264 encode: **111.44 s**. Output `shots/out/hero-final-9x16/hero-orbit.mp4`, 670,613 bytes, probed as exactly 10.00 s H.264, 1080×1920, 30 fps.
 - A preliminary draft test exposed a double-halving bug and failed 4:5 H.264 encoding. Both were corrected before the successful matrix above: `--draft` now sets Blender's 50% percentage against the full contract dimensions, and encoding trims only the odd 4:5 draft row.
 
+### Step 4: asynchronous API integration
+
+- Added `POST /api/shots/render` and `GET /api/shots/jobs/<id>`. The runner validates a library key or inline JSON spec, starts proof/render work in a daemon job, exposes check details and a proof contact-sheet URL, and refuses finals if checks fail. Completed MP4s are copied to `web/public/footage/` and returned as `/footage/<filename>` for segment use.
+- Shared venv server import/AST check passed. Started only the task API at `BLOCKCUT_PORT=8793`; ports 8787, 5173, and 5175 were not touched.
+- Proof request (`spec=hero-orbit`, `mode=proof`, `aspect=9:16`) completed with 34/34 checks. Its `proof_url` returned HTTP 200 (317,590 bytes).
+- Final request (`spec=hero-orbit`, `mode=final`, `aspect=9:16`) completed after proof and returned `/footage/shot-da0f1cc992f1.mp4` (670,613 bytes). HTTP GET returned 200, `video/mp4`; FFmpeg verified 10.00 s, 1080×1920, 30 fps H.264. The API process on 8793 was stopped after verification.
+- Reproduction: run `BLOCKCUT_PORT=8793 .venv/Scripts/python server.py` from the repo root; POST the README sample and poll `/api/shots/jobs/<id>` until `status=completed`. The shared API itself remains untouched.
+
 ## What works
 
 - `shots/render_shot.py` reads the documented JSON spec, builds a Blender EEVEE scene, imports GLB props or creates Blender primitives, animates camera/object keyframes, lights and exact-time text overlays.
