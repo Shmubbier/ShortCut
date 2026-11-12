@@ -6,6 +6,13 @@
 - Proof gate exercise on the unmodified hero: **24/28 checks passed**; four text/object overlap checks failed. Grounding passed on all six frames; background dE76 ranged 1.20–1.29; all objects were in frame. A final attempt was correctly blocked (exit 1) before render.
 - Step 1 renders/checks took 3.34 s for six proof frames (after scene startup); gate test took 0.76 s. Per-shot corrections and final timings will be added under subsequent step sections.
 
+### Step 2: spec fixes and proof rounds
+
+- **hero-orbit:** 1 spec-tuning proof round after first-pass baseline; **34/34 PASS**, render/check time 3.798 s. The camera target moves the basket into the lower two-thirds; the headline remains in the top third with a clear gap. Basket lowest point is z=0.000 m. Paper sample dE76=0.
+- **reveal-rise:** 6 proof rounds; **34/34 PASS**, final check time 3.586 s. Round 1 found title-safe and subject-zone issues. Subsequent camera/title placement fixed these, while scale/framing edits took the orb from 3 in-frame failures to 2, 1, then 0. It enters from below, finishes grounded, and the spec marks the entry airborne/initial off-frame interval as allowed.
+- **flyby:** 2 proof rounds; **90/90 PASS**, final check time 6.373 s. Round 1 found the title outside the safe region; moving it down in the spec cleared all checks. All three props have lowest z=0.000 m.
+- All proofs used 30 fps, 1920×1080 specs. Refreshed passing contact sheets are in the library README. All background samples are ΔE76≤3 (final successful run: 0.000 for hero/flyby; 0.000 on reveal's final JSON).
+
 ## What works
 
 - `shots/render_shot.py` reads the documented JSON spec, builds a Blender EEVEE scene, imports GLB props or creates Blender primitives, animates camera/object keyframes, lights and exact-time text overlays.

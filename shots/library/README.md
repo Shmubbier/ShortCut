@@ -12,8 +12,8 @@ The final mode writes PNG frames and an H.264 MP4. Proof mode writes six sampled
 
 | Shot | What it demonstrates | Prompt/spec | Thumbnail |
 |---|---|---|---|
-| **hero-orbit** | 10-second product hero: orbit, eased push-in at 6s, title at 1s, paper ground | [prompt](hero-orbit.prompt.md) · [spec](hero-orbit.json) | ![Hero orbit proof contact sheet](thumbs/hero-orbit.png) |
-| **reveal-rise** | Faceted object rises with easeOutBack and a slow camera tilt | [prompt](reveal-rise.prompt.md) · [spec](reveal-rise.json) | ![Reveal rise frame](thumbs/reveal-rise.png) |
-| **flyby** | Camera dolly past three props in a row | [prompt](flyby.prompt.md) · [spec](flyby.json) | ![Flyby frame](thumbs/flyby.png) |
+| **hero-orbit** | 10-second product hero: orbit, eased push-in at 6s, title at 1s, grounded basket on paper. Proof: 34/34 PASS, 30 fps. | [prompt](hero-orbit.prompt.md) · [spec](hero-orbit.json) | ![Passing hero-orbit proof sheet](thumbs/hero-orbit.png) |
+| **reveal-rise** | Faceted object rises with easeOutBack and a slow camera tilt. Proof: 34/34 PASS, 30 fps. | [prompt](reveal-rise.prompt.md) · [spec](reveal-rise.json) | ![Passing reveal-rise proof sheet](thumbs/reveal-rise.png) |
+| **flyby** | Camera dolly past three grounded props in a row. Proof: 90/90 PASS, 30 fps. | [prompt](flyby.prompt.md) · [spec](flyby.json) | ![Passing flyby proof sheet](thumbs/flyby.png) |
 
 Generated proof frames, full-resolution PNG sequences and MP4s are in the git-ignored `shots/out/` directory. The contact sheet is deliberately low resolution; inspect the final MP4 for framing and movement.
