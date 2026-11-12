@@ -1,4 +1,5 @@
 import { AbsoluteFill, Audio, Easing, Img, interpolate, OffthreadVideo, random, Sequence, spring, useCurrentFrame, useVideoConfig } from 'remotion'
+import { useState } from 'react'
 import type { Recipe } from './bench3d/recipe'
 import { Stage3D } from './Stage3D'
 import { fontCss, resolveTheme, stack, type Style, type Theme, type ThemeChoice } from './theme'
@@ -135,6 +136,8 @@ const Cutout = ({ src, t, i, tall }: { src: string; t: Theme; i: number; tall: b
   const { fps, height, width } = useVideoConfig()
   const s = spring({ frame: f - 4, fps, config: { damping: t.style === '2d' ? 8 : 12 } })
   const box = tall ? { width: width * 0.62, height: height * 0.3 } : { width: width * 0.32, height: height * 0.58 }
+  const [failed, setFailed] = useState(false) // missing file: drop the frame instead of showing an empty white box
+  if (failed) return null
   const look = {
     pixel: { padding: 0, background: 'transparent', boxShadow: `8px 8px 0 ${t.accent}`, borderRadius: 0, border: 'none' },
     '2d': { padding: 0, background: 'transparent', boxShadow: `14px 14px 0 ${t.ink[0]}`, borderRadius: 28, border: `8px solid ${t.ink[0]}` },
@@ -144,7 +147,7 @@ const Cutout = ({ src, t, i, tall }: { src: string; t: Theme; i: number; tall: b
   return (
     <div style={{ flex: '0 0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ position: 'relative', overflow: 'hidden', ...look, transform: `rotate(${(i % 2 ? 3 : -3) * s}deg) scale(${0.7 + 0.3 * s})`, opacity: Math.min(1, s * 1.5) }}>
-        <Img src={src} style={{ display: 'block', ...box, objectFit: 'cover', imageRendering: t.step > 1 ? 'pixelated' : 'auto' }} />
+        <Img src={src} maxRetries={0} onError={() => setFailed(true)} style={{ display: 'block', ...box, objectFit: 'cover', imageRendering: t.step > 1 ? 'pixelated' : 'auto' }} />
       </div>
       {(t.style === 'editorial' || t.style === '3d') && (
         <div style={{ position: 'absolute', width: 150, height: 38, background: 'rgba(240,226,180,.85)', transform: `translateY(${-box.height / 2 - 20}px) rotate(-4deg)`, opacity: s }} />

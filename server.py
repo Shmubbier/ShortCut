@@ -430,6 +430,11 @@ def to_scene(s: Scene, old: dict | None = None) -> dict:
             d["purpose"] = f"{d['purpose']} (3D prop was invalid JSON: {e.msg})"
     else:
         d["prop"] = None
+    # The AI sometimes invents an asset path (e.g. a source site's domain). Keep only real bucket files; otherwise keep the
+    # segment's previous image, or leave it empty so the UI fills in a found image.
+    a = str(d.get("asset") or "")
+    if a and not (a.startswith("/assets/") and (ASSETS / Path(a).name).is_file()):
+        d["asset"] = old.get("asset", "")
     same_line = old.get("voiceover") == d["voiceover"]
     return {"id": old.get("id") or uuid.uuid4().hex[:8], **d,
             "audio": old.get("audio") if same_line else None, "words": old.get("words", []) if same_line else []}
