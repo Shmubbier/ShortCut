@@ -6,39 +6,39 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/api/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/api/:path*"
     },
     {
       "source": "/assets/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/assets/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/assets/:path*"
     },
     {
       "source": "/media/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/media/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/media/:path*"
     },
     {
       "source": "/music/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/music/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/music/:path*"
     },
     {
       "source": "/footage/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/footage/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/footage/:path*"
     },
     {
       "source": "/models3d/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/models3d/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/models3d/:path*"
     },
     {
       "source": "/renders/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/renders/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/renders/:path*"
     },
     {
       "source": "/admin",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/admin"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/admin"
     },
     {
       "source": "/admin/:path*",
-      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/admin/:path*"
+      "destination": "https://shortcut-api-production-ddbf6218.up.railway.app/admin/:path*"
     }
   ]
 }
