@@ -125,7 +125,7 @@ def _auth_path() -> Path:
 
 
 def expire_credentials() -> bool:
-    if is_open():
+    if not active() or is_open():
         return False
     p = _auth_path()
     if p.exists():
@@ -138,5 +138,9 @@ def seed_credentials() -> None:
     p, blob = _auth_path(), os.environ.get("CODEX_AUTH_JSON")
     if is_open() and blob and not p.exists():
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(blob, encoding="utf-8")
-        os.chmod(p, 0o600)
+        try:
+            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(blob)

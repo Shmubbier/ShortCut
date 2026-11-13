@@ -98,6 +98,14 @@ class ReviewTest(unittest.TestCase):
         review.seed_credentials()
         self.assertFalse(os.path.exists(auth))
 
+    def test_expire_noop_when_gate_inactive(self):
+        del os.environ["REVIEWER_CODE"]
+        auth = os.path.join(self.tmp.name, "auth.json")
+        with open(auth, "w") as f:
+            f.write("{}")
+        self.assertIs(review.expire_credentials(), False)
+        self.assertTrue(os.path.exists(auth))
+
 
 if __name__ == "__main__":
     unittest.main()
