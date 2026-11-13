@@ -1,0 +1,6 @@
+# never upload local review codes or scripts to Railway
+deploy/*.local
+deploy/*.local.ps1
+.env
+tools/
+models/

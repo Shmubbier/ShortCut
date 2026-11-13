@@ -46,3 +46,4 @@ samples/*.ready.json
 
 # hosted review codes (local only)
 deploy/*.local
+deploy/*.local.ps1
