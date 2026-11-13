@@ -27,5 +27,5 @@ RUN mkdir -p models/faster-whisper-base && cd models/faster-whisper-base \
 
 COPY . .
 
-ENV PYTHONUNBUFFERED=1 BLOCKCUT_AI=codex CODEX_HOME=/data/codex REVIEW_DATA_DIR=/data
+ENV PYTHONUNBUFFERED=1 BLOCKCUT_AI=codex CODEX_HOME=/data/codex REVIEW_DATA_DIR=/data REVIEW_HOSTED=1
 CMD ["sh", "deploy/start.sh"]

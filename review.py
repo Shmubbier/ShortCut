@@ -36,7 +36,10 @@ def active() -> bool:
 
 
 def hosted() -> bool:
-    return bool(os.environ.get("PORT"))  # Railway sets PORT; the laptop and the demo instance do not
+    """Only an explicit flag (set by the Dockerfile) or Railway's own variables. PORT alone is not proof: the laptop may set it."""
+    if os.environ.get("REVIEW_HOSTED") == "1":
+        return True
+    return any(os.environ.get(k) for k in ("RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID"))
 
 
 def locked_down() -> bool:
@@ -115,15 +118,17 @@ def log(name, action, topic, ok, seconds) -> None:
 
 def read_log() -> list:
     try:
-        lines = _log_path().read_text(encoding="utf-8").splitlines()
+        lines = _log_path().read_text(encoding="utf-8", errors="replace").splitlines()
     except FileNotFoundError:
         return []
     out = []
     for l in reversed(lines):
         try:
-            out.append(json.loads(l))
+            d = json.loads(l)
         except ValueError:  # a truncated or corrupt line must not blank /admin or the CSV
             continue
+        if isinstance(d, dict):
+            out.append(d)
     return out
 
 
@@ -140,13 +145,15 @@ def _auth_path() -> Path:
 
 
 def expire_credentials() -> bool:
-    if not (active() or hosted()) or is_open():
+    """True when a sign-in file was removed. Never touches the ~/.codex default: CODEX_HOME must be set explicitly."""
+    if not os.environ.get("CODEX_HOME") or not (active() or hosted()) or is_open():
         return False
     p = _auth_path()
-    if p.exists():
+    try:
         p.unlink()
         return True
-    return False
+    except FileNotFoundError:
+        return False
 
 
 def seed_credentials() -> None:

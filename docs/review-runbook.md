@@ -18,7 +18,7 @@ Note: `web/vercel.json` currently contains the placeholder `https://REPLACE-WITH
 | `REVIEW_EXPIRES_AT` | set this right before you send the email (step 7): ISO 8601 with timezone, 7 days later, e.g. `2026-11-21T18:00:00+08:00` |
 | `CODEX_AUTH_JSON` | optional fallback seed: contents of your laptop's `~/.codex/auth.json` |
 
-The image already sets `BLOCKCUT_AI=codex`, `CODEX_HOME=/data/codex`, `REVIEW_DATA_DIR=/data`.
+The image already sets `BLOCKCUT_AI=codex`, `CODEX_HOME=/data/codex`, `REVIEW_DATA_DIR=/data`, `REVIEW_HOSTED=1` (the hosted lock-down and credential removal key off `REVIEW_HOSTED`, not `PORT`).
 
 ## 3. Server's own Codex sign-in
 Use the Railway CLI from Git Bash (all commands in this runbook are for Git Bash):

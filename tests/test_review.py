@@ -5,6 +5,11 @@ import threading
 import unittest
 from unittest import mock
 
+# `discover -s tests` does not import tests/__init__.py, so isolate here too, before review/server load.
+_tmp = tempfile.mkdtemp(prefix="shortcut-tests-")
+os.environ["CODEX_HOME"] = os.path.join(_tmp, "codex")
+os.environ["REVIEW_DATA_DIR"] = _tmp
+
 import review
 
 FUTURE = "2999-01-01T00:00:00+00:00"
@@ -113,6 +118,45 @@ class ReviewTest(unittest.TestCase):
             f.write("{}")
         self.assertIs(review.expire_credentials(), False)
         self.assertTrue(os.path.exists(auth))
+
+    def test_read_log_skips_non_dict_and_bad_utf8(self):
+        review.log("A", "plan", "x", True, 1)
+        with open(review._log_path(), "ab") as f:
+            f.write(b"123\n\xff\xfe{bad\n")
+        review.log("B", "plan", "y", True, 1)
+        self.assertEqual([e["name"] for e in review.read_log()], ["B", "A"])
+        self.assertEqual(len(review.log_csv().strip().splitlines()), 3)
+
+    def test_hosted_signal(self):
+        for k in ("REVIEW_HOSTED", "RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID"):
+            os.environ.pop(k, None)
+        os.environ["PORT"] = "9"
+        self.assertIs(review.hosted(), False)
+        os.environ["RAILWAY_PROJECT_ID"] = "p"
+        self.assertIs(review.hosted(), True)
+        del os.environ["RAILWAY_PROJECT_ID"]
+        os.environ["REVIEW_HOSTED"] = "1"
+        self.assertIs(review.hosted(), True)
+
+    def test_default_codex_home_never_deleted(self):
+        del os.environ["REVIEWER_CODE"]
+        del os.environ["CODEX_HOME"]
+        os.environ["REVIEW_HOSTED"] = "1"
+        fake_home = os.path.join(self.tmp.name, "home")
+        auth = os.path.join(fake_home, ".codex", "auth.json")
+        os.makedirs(os.path.dirname(auth))
+        with open(auth, "w") as f:
+            f.write("{}")
+        with mock.patch.object(review.Path, "home", return_value=review.Path(fake_home)),                 mock.patch.object(review.Path, "unlink") as unlink:
+            self.assertIs(review.expire_credentials(), False)
+        unlink.assert_not_called()
+        self.assertTrue(os.path.exists(auth))
+
+    def test_suite_never_points_at_real_codex(self):
+        real = os.path.normcase(str(review.Path.home() / ".codex"))
+        here = os.path.normcase(os.path.abspath(os.environ["CODEX_HOME"]))
+        self.assertFalse(here == real or here.startswith(real + os.sep))
+        self.assertFalse(os.path.normcase(_tmp).startswith(real))  # module-level isolation too
 
 
 if __name__ == "__main__":

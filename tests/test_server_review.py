@@ -9,6 +9,11 @@ from datetime import datetime, timedelta, timezone
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
+# `discover -s tests` does not import tests/__init__.py, so isolate here too, before review/server load.
+_tmp = tempfile.mkdtemp(prefix="shortcut-tests-")
+os.environ["CODEX_HOME"] = os.path.join(_tmp, "codex")
+os.environ["REVIEW_DATA_DIR"] = _tmp
+
 import review
 import server
 
@@ -20,7 +25,7 @@ class ServerReviewTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        env = {"REVIEW_DATA_DIR": self.tmp.name, "ADMIN_CODE": ADMIN,
+        env = {"REVIEW_DATA_DIR": self.tmp.name, "CODEX_HOME": self.tmp.name, "ADMIN_CODE": ADMIN,
                "REVIEW_EXPIRES_AT": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
         if self.gate:
             env["REVIEWER_CODE"] = "test-code"
@@ -212,7 +217,7 @@ class HostedNoCodeTest(ServerReviewTest):
 
     def setUp(self):
         super().setUp()
-        p = mock.patch.dict(os.environ, {"PORT": "9"})
+        p = mock.patch.dict(os.environ, {"REVIEW_HOSTED": "1"})
         p.start()
         self.addCleanup(p.stop)
 
@@ -222,13 +227,44 @@ class HostedNoCodeTest(ServerReviewTest):
         s, t, _ = self.req("GET", "/api/session/status")
         self.assertIs(json.loads(t)["open"], False)
 
-    def test_hosted_without_code_removes_credentials(self):
+    def test_hosted_flag_locks_and_removes(self):
         auth = os.path.join(self.tmp.name, "auth.json")
         with open(auth, "w") as f:
             f.write("{}")
-        with mock.patch.dict(os.environ, {"CODEX_HOME": self.tmp.name}):
-            self.req("GET", "/api/session/status")
+        s, t, _ = self.req("POST", "/api/plan", {})
+        self.assertEqual((s, json.loads(t)), (401, {"error": "locked"}))
         self.assertFalse(os.path.exists(auth))
+
+    test_status_open = test_plan_locked_without_headers = test_plan_with_headers_runs_and_logs = None
+    test_session_wrong_code = test_session_ok_logs_unlock = test_assets_list_gated = None
+    test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
+    test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
+    test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+
+
+class LaptopPortTest(ServerReviewTest):
+    """The laptop with PORT set (no code, no REVIEW_HOSTED, no Railway vars) behaves exactly as before."""
+    gate = False
+
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.dict(os.environ, {"PORT": "9"})
+        p.start()
+        self.addCleanup(p.stop)
+        for k in ("REVIEW_HOSTED", "RAILWAY_ENVIRONMENT", "RAILWAY_ENVIRONMENT_NAME", "RAILWAY_PROJECT_ID"):
+            os.environ.pop(k, None)
+
+    def test_laptop_port_does_not_delete(self):
+        auth = os.path.join(self.tmp.name, "auth.json")
+        with open(auth, "w") as f:
+            f.write("{}")
+        self.assertIs(review.expire_credentials(), False)
+        s, t, _ = self.req("POST", "/api/plan", {})
+        self.assertEqual(s, 200)
+        self.assertIn("stub", t)
+        self.assertEqual(self.req("GET", "/api/assets")[0], 200)
+        self.req("GET", "/api/session/status")
+        self.assertTrue(os.path.exists(auth))
 
     test_status_open = test_plan_locked_without_headers = test_plan_with_headers_runs_and_logs = None
     test_session_wrong_code = test_session_ok_logs_unlock = test_assets_list_gated = None
@@ -244,7 +280,7 @@ class MediaTest(unittest.TestCase):
         self.assertEqual(out, {"a": "http://127.0.0.1:9123/assets/x.jpg", "b": ["http://127.0.0.1:9123/demo/media/x.jpg"]})
 
     def test_demo_static_served_and_confined(self):
-        env = {"REVIEW_DATA_DIR": tempfile.gettempdir()}
+        env = {"REVIEW_DATA_DIR": tempfile.gettempdir(), "CODEX_HOME": os.environ["CODEX_HOME"]}
         with mock.patch.dict(os.environ, env), mock.patch.object(server.Handler, "log_message", lambda *a: None):
             httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
             threading.Thread(target=httpd.serve_forever, daemon=True).start()
