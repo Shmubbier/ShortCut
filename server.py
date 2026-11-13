@@ -11,6 +11,11 @@ POST /api/assets/delete {url}
 Scene shape: see web/src/video/Video.tsx (SceneData). Run: .venv/Scripts/python server.py  (port 8787; Vite proxies /api)
 """
 import asyncio
+import html
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
+from http.cookies import SimpleCookie
 import concurrent.futures
 import base64
 import hashlib
@@ -29,7 +34,7 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Literal
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from pydantic import BaseModel
 from shots.jobs import create_shot_job, get_shot_job
@@ -39,6 +44,7 @@ import music
 import asset_search
 import tts
 import polyfork
+import review
 
 ROOT = Path(__file__).parent
 ASSETS = ROOT / "web" / "public" / "assets"
@@ -1265,8 +1271,133 @@ ROUTES["/api/styles/delete"] = lambda body: (cstyles.delete_style(str(body.get("
 SLOW_ROUTES = {"/api/plan", "/api/edit", "/api/voice", "/api/assets/find", "/api/footage/transcribe", "/api/footage/storyboard"}
 
 
+# Hosted-review gate (review.py): only active when REVIEWER_CODE is set, so the laptop behaves as before.
+GATED = {"/api/plan", "/api/edit", "/api/voice", "/api/assets", "/api/assets/find", "/api/assets/search", "/api/assets/import",
+         "/api/assets/scrape", "/api/assets/upload", "/api/assets/delete", "/api/render", "/api/styles/from-url",
+         "/api/styles/delete", "/api/shots/render"}
+ADMIN_TOKENS: set = set()  # in memory: a restart signs the admin out
+MANILA = timezone(timedelta(hours=8))
+
+
+def is_gated(path):
+    return path in GATED or path.startswith("/api/footage/")
+
+
+def safe_log(*args):
+    try:
+        review.log(*args)
+    except Exception as e:  # a logging failure must never change the reviewer's response
+        print("review log failed:", repr(e))
+
+
+def admin_page(rows, error=""):
+    esc = html.escape
+    counts = {}
+    for r in rows:
+        counts[r.get("name", "")] = counts.get(r.get("name", ""), 0) + 1
+    def when(t):
+        try:
+            return datetime.fromisoformat(t).astimezone(MANILA).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return str(t)
+    summary = "".join(f"<li>{esc(str(n))}: {c}</li>" for n, c in sorted(counts.items()))
+    body = "".join(
+        f"<tr><td>{esc(when(r.get('time')))}</td><td>{esc(str(r.get('name', '')))}</td><td>{esc(str(r.get('action', '')))}</td>"
+        f"<td>{esc(str(r.get('topic', '')))}</td><td>{'ok' if r.get('ok') else 'failed'}</td><td>{esc(str(r.get('seconds', '')))}</td></tr>"
+        for r in rows)
+    note = f"<p><b>{esc(error)}</b></p>" if error else ""
+    return ("<!doctype html><meta charset=utf-8><title>ShortCut review log</title>"
+            "<style>body{font:14px sans-serif;margin:2em}td,th{padding:3px 10px;text-align:left}</style>"
+            f"<h1>Review log (Manila time, newest first)</h1>{note}<p><a href=\"/admin/log.csv\">Download CSV</a></p>"
+            f"<ul>{summary}</ul><table><tr><th>Time</th><th>Name</th><th>Action</th><th>Topic</th><th>Result</th><th>Seconds</th></tr>{body}</table>")
+
+
+ADMIN_LOGIN = ("<!doctype html><meta charset=utf-8><title>ShortCut admin</title>"
+               "<form method=post action=/admin><label>Admin code <input type=password name=code autofocus></label> "
+               "<button>Sign in</button></form>")
+
+
 class Handler(BaseHTTPRequestHandler):
+    def client_addr(self):
+        # Behind Vercel/Railway the socket peer is the proxy; the first X-Forwarded-For entry is the visitor. Limiter key only.
+        fwd = self.headers.get("X-Forwarded-For", "")
+        return fwd.split(",")[0].strip() or self.client_address[0]
+
+    def gate(self, path):
+        """None = proceed (ungated or gate off); (name, action) = proceed and log; False = already answered 401/429."""
+        if not (review.active() and is_gated(path)):
+            return None
+        review.expire_credentials()
+        ok, name = review.check(self.headers.get("X-Reviewer-Code", ""), self.headers.get("X-Reviewer-Name", ""), self.client_addr())
+        capped = ok and not review.allow_action()
+        if not ok or capped:
+            # Drain the unread body first: closing a socket with unread data resets the connection and the client loses the reply.
+            self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
+            self.reply({"error": "Today's live limit is reached; the demo still works."} if capped else {"error": "locked"}, 429 if capped else 401)
+            return False
+        return name, path[len("/api/"):]
+
+    def logged(self, fn, who):
+        """Wrap a route so every outcome (also inside reply_slow's worker) lands in the usage log."""
+        def run(body):
+            t0, ok = time.time(), False
+            try:
+                out = fn(body)
+                ok = not (isinstance(out, dict) and out.get("error"))
+                return out
+            finally:
+                topic = next((str(body[k]) for k in ("topic", "instruction", "query", "url") if isinstance(body, dict) and body.get(k)), "")
+                safe_log(who[0], who[1], topic, ok, time.time() - t0)
+        return run
+
+    def admin_ok(self):
+        c = SimpleCookie(self.headers.get("Cookie", "")).get("sc_admin")
+        return bool(c) and c.value in ADMIN_TOKENS
+
+    def send_html(self, text, code=200, ctype="text/html; charset=utf-8", extra=()):
+        data = text.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        for k, v in extra:
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_admin_get(self, path):
+        if not self.admin_ok():
+            return self.send_html(ADMIN_LOGIN, 200 if path == "/admin" else 401)
+        if path == "/admin/log.csv":
+            try:
+                return self.send_html(review.log_csv(), ctype="text/csv; charset=utf-8")
+            except Exception as e:
+                print("admin csv failed:", repr(e))
+                return self.send_html("log could not be read", 500, "text/plain")
+        try:
+            return self.send_html(admin_page(review.read_log()))
+        except Exception as e:
+            print("admin log failed:", repr(e))
+            return self.send_html(admin_page([], "The log file could not be read (a line may be corrupt)."))
+
+    def do_admin_post(self):
+        length = min(int(self.headers.get("Content-Length", 0)), 10_000)
+        form = parse_qs(self.rfile.read(length).decode("utf-8", "replace"))
+        code, real = form.get("code", [""])[0], os.environ.get("ADMIN_CODE", "")
+        if not real or not hmac.compare_digest(code.encode(), real.encode()):
+            return self.send_html(ADMIN_LOGIN, 401)
+        token = secrets.token_urlsafe(32)
+        ADMIN_TOKENS.add(token)
+        self.send_html("", 303, extra=[("Location", "/admin"),
+                                       ("Set-Cookie", f"sc_admin={token}; Path=/admin; HttpOnly; SameSite=Lax; Max-Age=43200")])
+
     def do_GET(self):
+        path = urlparse(self.path).path
+        if path in ("/admin", "/admin/log.csv"):
+            return self.do_admin_get(path)
+        if path == "/api/session/status":
+            return self.reply({"open": review.is_open(), "expiresAt": review.expires_at().isoformat() if review.active() else None}, 200)
+        if self.path == "/api/assets" and self.gate("/api/assets") is False:
+            return
         if self.path == "/api/voices":
             engines = tts.engine_status()
             return self.reply({"engines": engines, "voices": (["qwen:ryan", "qwen:serena", "qwen:vivian"] if engines["qwen"] else [])}, 200)
@@ -1345,9 +1476,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         route_path = urlparse(self.path).path
+        if route_path == "/admin":
+            return self.do_admin_post()
+        if route_path == "/api/session":
+            return self.do_session()
         fn = ROUTES.get(route_path)
         if not fn:
             return self.send_error(404)
+        who = self.gate(route_path)  # decided before reply_slow starts, so a locked call gets a real 401
+        if who is False:
+            return
+        if who:
+            fn = self.logged(fn, who)
         try:
             length = int(self.headers.get("Content-Length", 0))
             max_request = MAX_FOOTAGE_BYTES * 4 // 3 + 2_000_000 if route_path == "/api/footage/upload" else 30_000_000
@@ -1361,6 +1501,19 @@ class Handler(BaseHTTPRequestHandler):
             print(f"{self.path} failed:", repr(e))
             out, code = {"error": str(e)}, 400
         self.reply(out, code)
+
+    def do_session(self):
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 10_000)))
+            code, typed = str(body.get("code", "")), str(body.get("name", ""))
+        except Exception:
+            return self.reply({"error": review.BAD_CODE}, 401)
+        ok, msg = review.check(code, typed, self.client_addr()) if review.active() else (False, review.BAD_CODE)
+        if review.active():
+            safe_log(typed.strip()[:40], "unlock", "", ok, 0)
+        if not ok:
+            return self.reply({"error": msg}, 401)
+        self.reply({"ok": True, "name": msg, "expiresAt": review.expires_at().isoformat()}, 200)
 
     def reply_slow(self, fn, body):
         """Calls that can run past 100 s (AI generation, voicing). A public tunnel (Cloudflare) drops a response that sends
@@ -1398,6 +1551,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("BLOCKCUT_PORT", "8787"))  # parallel agents test on their own port
-    print(f"ShortCut API on http://localhost:{port}")
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    # Railway sets PORT and needs all interfaces; on the laptop stay on localhost (parallel agents use BLOCKCUT_PORT).
+    host, port = ("0.0.0.0", int(os.environ["PORT"])) if os.environ.get("PORT") else ("127.0.0.1", int(os.environ.get("BLOCKCUT_PORT", "8787")))
+    if review.active():
+        review.expires_at()  # prints the warning at boot if REVIEW_EXPIRES_AT is bad
+        review.seed_credentials()
+        review.expire_credentials()
+    print(f"ShortCut API on http://{host}:{port}")
+    ThreadingHTTPServer((host, port), Handler).serve_forever()
