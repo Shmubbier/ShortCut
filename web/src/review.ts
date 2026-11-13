@@ -32,3 +32,16 @@ export async function unlock(code: string, name: string): Promise<{ ok: true; na
 }
 
 export const untilText = (iso: string) => new Date(iso).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Manila'
+
+// Set by App while in live mode: called when live access ends or the backend fails, so the app drops back to demo.
+let liveLost: (() => void) | null = null
+export const setLiveLost = (f: (() => void) | null) => { liveLost = f }
+
+// fetch() that sends the reviewer headers and triggers the live-lost fallback on 401 / 429 / 5xx / network error.
+export async function gfetch(path: string, init: RequestInit = {}): Promise<Response> {
+  let r: Response
+  try { r = await fetch(path, { ...init, headers: { ...init.headers as Record<string, string>, ...reviewHeaders() } }) }
+  catch (e) { liveLost?.(); throw e }
+  if (r.status === 401 || r.status === 429 || r.status >= 500) liveLost?.()
+  return r
+}

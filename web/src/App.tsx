@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
 import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
-import { checkStatus, clearAccess, getAccess, reviewHeaders, saveAccess, unlock, untilText } from './review'
+import { checkStatus, clearAccess, getAccess, gfetch, saveAccess, setLiveLost, unlock, untilText } from './review'
 import { DEMO_COOK_MS, loadDemoIndex, loadDemoPlan, matchDemo, type DemoEntry, type DemoIndex, type Mode } from './demo'
 import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, type Aspect, type Plan, type SceneData } from './video/Video'
@@ -20,16 +20,9 @@ type PanelId = 'assets' | 'script' | 'style' | 'settings'
 // Real generation stages (spec §4A): the bar advances when a stage actually finishes, not on a timer.
 type Gen = { stages: string[]; at: number }
 
-// Set by App while in live mode: called when live access ends or the backend fails, so the app drops back to demo.
-let onLiveLost: (() => void) | null = null
-
 async function api(path: string, body?: unknown) {
-  const headers = reviewHeaders()
-  let r: Response
-  try { r = await fetch(path, { method: body === undefined ? 'GET' : 'POST', body: body === undefined ? undefined : JSON.stringify(body), headers }) }
-  catch (e) { onLiveLost?.(); throw e }
+  const r = await gfetch(path, body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) })
   const text = await r.text()
-  if (r.status === 401 || r.status === 429 || r.status >= 500) onLiveLost?.()
   if (!text) throw new Error('API server not running — start it with: .venv/Scripts/python server.py')
   if (!r.ok && !text.trimStart().startsWith('{')) throw new Error(`${r.status} ${r.statusText}`) // e.g. an HTML 404 for a route that doesn't exist yet
   const j = JSON.parse(text)
@@ -202,20 +195,20 @@ export default function App() {
 
   // Live mode: a failure or ended access drops back to demo and keeps the open plan on screen.
   useEffect(() => {
-    if (mode !== 'live') { onLiveLost = null; return }
-    onLiveLost = () => {
-      onLiveLost = null
+    if (mode !== 'live') { setLiveLost(null); return }
+    setLiveLost(() => {
+      setLiveLost(null)
       setMode('demo')
       setToast({ text: "Live access ended or is unavailable. You're back in demo mode; your video is kept.", undo: false })
-    }
-    return () => { onLiveLost = null }
+    })
+    return () => setLiveLost(null)
   }, [mode])
   // On load: if the site is open and this browser remembers a code, quietly switch to live.
   useEffect(() => {
     const a = getAccess()
     if (!a) return
     checkStatus().then(async (st) => {
-      if (!st.open) return
+      if (!st.open) return clearAccess() // review closed or expired: forget the code, stay in demo
       const u = await unlock(a.code, a.name)
       if (u.ok) { setWho(u.name); setExpiresAt(u.expiresAt); setMode('live') } else clearAccess()
     })
@@ -697,7 +690,7 @@ export default function App() {
           <header>
             <b>{plan?.title ?? 'Generating…'}</b>
             {plan?.contentStyle && <span className="chip" title="Content style: ask the assistant to change it, e.g. 'make it a story'">{contentStyles.find((c) => c.id === plan.contentStyle)?.label ?? plan.contentStyle}</span>}
-            {liveChip}
+            {liveChip || <button className="ghost" onClick={() => setUnlockOpen(true)}>Reviewer access</button>}
             <button className="ghost" onClick={undo} disabled={!history.length}>Undo</button>
             <button className="ghost" onClick={newProject} disabled={!!gen}>New video</button>
           </header>

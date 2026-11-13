@@ -1,6 +1,7 @@
 // Flyout panels opened from the left icon rail: Script (transcript), Style, Settings. The Assets panel lives in App
 // because it shares upload/search state with the assistant. All panels edit the same Plan through change()/snapshot().
 import { useEffect, useState, type ReactNode } from 'react'
+import { gfetch } from './review'
 import { FONTS, PALETTES, STYLES, resolveTheme, type Style } from './video/theme'
 import { ASPECTS, CAPTION_LOOKS, EFFECTS, FPS, OVERLAP, ROLES, sceneLen, sceneStarts, TRANSITIONS, isEmpty, type Aspect, type Effect, type Plan, type Track, type Transition } from './video/Video'
 
@@ -69,7 +70,7 @@ export function StyleFromUrl({ onDone, locked }: { onDone?: (s: SavedStyle) => v
     if (!refJob?.id || !running) return
     const timer = window.setInterval(async () => {
       try {
-        const j = await (await fetch(`/api/styles/jobs/${refJob.id}`)).json()
+        const j = await (await gfetch(`/api/styles/jobs/${refJob.id}`)).json()
         setRefJob(j)
         if (j.status === 'done') { window.dispatchEvent(new Event('blockcut-styles-updated')); onDone?.(j.style) }
       } catch { /* next poll can recover */ }
@@ -79,7 +80,7 @@ export function StyleFromUrl({ onDone, locked }: { onDone?: (s: SavedStyle) => v
   const start = async () => {
     setRefJob({ status: 'queued', stage: 'starting', progress: 0 })
     try {
-      const r = await fetch('/api/styles/from-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: refUrl }) })
+      const r = await gfetch('/api/styles/from-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: refUrl }) })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Could not start style extraction')
       setRefJob(j)
@@ -125,14 +126,14 @@ function StyleCard({ s, current, busy, onRestyle, onDelete }: { s: SavedStyle; c
 export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy, locked }: Edit & { tileProps: (t: Tile) => object; onRestyle: (s: SavedStyle) => void; busy: boolean; locked?: () => void }) {
   const [mine, setMine] = useState<SavedStyle[]>([])
   useEffect(() => {
-    const load = () => fetch('/api/styles').then((r) => r.json()).then((all: SavedStyle[]) => setMine(all.filter((x) => x.custom))).catch(() => {})
+    const load = () => gfetch('/api/styles').then((r) => r.json()).then((all: SavedStyle[]) => setMine(all.filter((x) => x.custom))).catch(() => {})
     load()
     window.addEventListener('blockcut-styles-updated', load)
     return () => window.removeEventListener('blockcut-styles-updated', load)
   }, [])
   const remove = async (s: SavedStyle) => {
     if (!window.confirm(`Delete the style “${s.label}”? Videos already made with it keep their script.`)) return
-    await fetch('/api/styles/delete', { method: 'POST', body: JSON.stringify({ id: s.id }) })
+    await gfetch('/api/styles/delete', { method: 'POST', body: JSON.stringify({ id: s.id }) })
     window.dispatchEvent(new Event('blockcut-styles-updated'))
   }
   const t = resolveTheme(plan.style, plan.theme)
@@ -232,7 +233,7 @@ export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy,
 export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport, onRender, renderUrl }: Edit & { voice: (i: number | null) => void; busy: string; onExport: () => void; onRender: () => void; renderUrl: string }) {
   const voiced = plan.scenes.filter((s) => s.audio).length
   const [qwenVoices, setQwenVoices] = useState<string[]>([])
-  useEffect(() => { fetch('/api/voices').then(r => r.ok ? r.json() : null).then(d => setQwenVoices(d?.voices ?? [])).catch(() => {}) }, [])
+  useEffect(() => { gfetch('/api/voices').then(r => r.ok ? r.json() : null).then(d => setQwenVoices(d?.voices ?? [])).catch(() => {}) }, [])
   return (
     <>
       <label>Title<input value={plan.title} onChange={(e) => change({ ...plan, title: e.target.value })} /></label>
@@ -270,7 +271,7 @@ export function SettingsPanel({ plan, change, snapshot, voice, busy, onExport, o
 // Music: the AI's pick and its runners-up as one-click recommendations, the full library, volume, or none.
 function MusicPanel({ plan, change, snapshot }: Edit) {
   const [library, setLibrary] = useState<Track[]>([])
-  useEffect(() => { fetch('/api/music').then((r) => r.json()).then(setLibrary).catch(() => {}) }, [])
+  useEffect(() => { gfetch('/api/music').then((r) => r.json()).then(setLibrary).catch(() => {}) }, [])
   const byId = Object.fromEntries(library.map((m) => [m.id, m]))
   const pick = (id: string) => { const m = byId[id]; if (m) { snapshot(); change({ ...plan, music: { ...m, volume: plan.music?.volume ?? 0.5 } }) } }
   const recs = (plan.musicOptions ?? []).filter((id) => byId[id])
