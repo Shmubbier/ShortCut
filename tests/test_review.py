@@ -60,6 +60,14 @@ class ReviewTest(unittest.TestCase):
             self.assertIs(review.is_open(), False)
         pr.assert_called_once()
 
+    def test_corrupt_log_line_skipped(self):
+        review.log("A", "plan", "x", True, 1)
+        with open(review._log_path(), "a", encoding="utf-8") as f:
+            f.write('{"time": "trunc' + chr(10))
+        review.log("B", "plan", "y", True, 1)
+        self.assertEqual(len(review.read_log()), 2)
+        self.assertEqual(len(review.log_csv().strip().splitlines()), 3)
+
     def test_daily_cap(self):
         os.environ["REVIEW_DAILY_CAP"] = "3"
         self.assertEqual([review.allow_action() for _ in range(4)],

@@ -37,6 +37,7 @@ from typing import Literal
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from pydantic import BaseModel
+from shots import jobs as shots_jobs
 from shots.jobs import create_shot_job, get_shot_job
 
 import content_styles as cstyles
@@ -1204,14 +1205,18 @@ def create_style_from_url(body: dict) -> dict:
     return {"id": jid, **STYLE_JOBS[jid]}
 
 
+def listen_port() -> int:
+    return int(os.environ.get("PORT") or os.environ.get("BLOCKCUT_PORT") or 8787)
+
+
 def _absolute_media(plan: dict) -> dict:
-    base = f"http://127.0.0.1:{os.environ.get('BLOCKCUT_PORT', '8787')}"
+    base = f"http://127.0.0.1:{listen_port()}"
     def fix(value):
         if isinstance(value, dict):
             return {k: fix(v) for k, v in value.items()}
         if isinstance(value, list):
             return [fix(v) for v in value]
-        if isinstance(value, str) and value.startswith(("/assets/", "/media/", "/music/", "/footage/", "/models3d/")):
+        if isinstance(value, str) and value.startswith(("/assets/", "/media/", "/music/", "/footage/", "/models3d/", "/demo/")):
             return base + value
         return value
     return fix(plan)
@@ -1331,10 +1336,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def gate(self, path):
         """None = proceed (ungated or gate off); (name, action) = proceed and log; False = already answered 401/429."""
-        if not (review.active() and is_gated(path)):
+        if not is_gated(path) or not (review.active() or review.hosted()):
             return None
         review.expire_credentials()
+        if review.locked_down():
+            self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
+            self.reply({"error": "locked"}, 401)
+            return False
         ok, name = review.check(self.headers.get("X-Reviewer-Code", ""), self.headers.get("X-Reviewer-Name", ""), self.client_addr())
+        if ok and path == "/api/shots/render":
+            try:
+                shots_jobs.blender_executable()
+            except RuntimeError:  # hosted image has no Blender; answer without spending the daily cap
+                self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
+                self.reply({"error": "3D shots aren't available on the hosted version"}, 400)
+                return False
         capped = ok and path in SPEND and not review.allow_action()
         if not ok or capped:
             # Drain the unread body first: closing a socket with unread data resets the connection and the client loses the reply.
@@ -1411,13 +1427,14 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/admin", "/admin/log.csv"):
             return self.do_admin_get(path)
         if path == "/api/session/status":
+            review.expire_credentials()
             return self.reply({"open": review.is_open(), "expiresAt": review.expires_at().isoformat() if review.active() else None}, 200)
-        if self.path == "/api/assets" and self.gate("/api/assets") is False:
+        if path == "/api/assets" and self.gate("/api/assets") is False:
             return
         if self.path == "/api/voices":
             engines = tts.engine_status()
             return self.reply({"engines": engines, "voices": (["qwen:ryan", "qwen:serena", "qwen:vivian"] if engines["qwen"] else [])}, 200)
-        if self.path == "/api/assets":
+        if path == "/api/assets":
             return self.reply(list_assets(), 200)
         if self.path == "/api/styles":
             return self.reply(cstyles.list_styles(), 200)
@@ -1444,9 +1461,13 @@ class Handler(BaseHTTPRequestHandler):
             job = get_shot_job(job_id)
             return self.reply(job or {"status": "not_found"}, 200 if job else 404)
         # Serve the bucket and voiceovers too, so any front end (e.g. a worktree's dev server) can proxy them here.
-        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/models3d/", ROOT / "web" / "public" / "models3d"), ("/renders/", RENDERS)):
+        for prefix, folder in (("/assets/", ASSETS), ("/media/", MEDIA), ("/music/", music.OUT), ("/footage/", FOOTAGE), ("/models3d/", ROOT / "web" / "public" / "models3d"), ("/renders/", RENDERS), ("/demo/", ROOT / "web" / "public" / "demo")):
             if self.path.startswith(prefix):
                 p = folder / Path(unquote(urlparse(self.path).path)).name  # .name keeps us inside the folder
+                if prefix == "/demo/":  # nested (demo/media/x.jpg): resolve and keep inside the folder
+                    p = (folder / unquote(path)[len(prefix):]).resolve()
+                    if folder.resolve() not in p.parents:
+                        return self.send_error(404)
                 if not p.is_file():
                     return self.send_error(404)
                 size = p.stat().st_size
@@ -1519,6 +1540,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(out, code)
 
     def do_session(self):
+        review.expire_credentials()
         try:
             body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 10_000)))
             code, typed = str(body.get("code", "")), str(body.get("name", ""))
@@ -1568,7 +1590,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     # Railway sets PORT and needs all interfaces; on the laptop stay on localhost (parallel agents use BLOCKCUT_PORT).
-    host, port = ("0.0.0.0", int(os.environ["PORT"])) if os.environ.get("PORT") else ("127.0.0.1", int(os.environ.get("BLOCKCUT_PORT", "8787")))
+    host, port = ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"), listen_port()
     if len(os.environ.get("ADMIN_CODE", "")) in range(1, 16):
         print("warning: ADMIN_CODE is shorter than 16 characters")
     if review.active():
@@ -1576,6 +1598,6 @@ if __name__ == "__main__":
             print("warning: REVIEWER_CODE is shorter than 10 characters")
         review.expires_at()  # prints the warning at boot if REVIEW_EXPIRES_AT is bad
         review.seed_credentials()
-        review.expire_credentials()
+    review.expire_credentials()  # also when hosted without a code: credentials never outlive the gate
     print(f"ShortCut API on http://{host}:{port}")
     ThreadingHTTPServer((host, port), Handler).serve_forever()

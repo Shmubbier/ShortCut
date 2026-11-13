@@ -127,6 +127,15 @@ class ServerReviewTest(unittest.TestCase):
             self.assertIn(part, c)
         self.assertEqual(r.getheader("Location"), "/admin")
 
+    def test_shots_without_blender_not_counted(self):
+        os.environ["REVIEW_DAILY_CAP"] = "1"
+        h = {"X-Reviewer-Code": "test-code", "X-Reviewer-Name": "Maria"}
+        with mock.patch.object(server.shots_jobs, "blender_executable", side_effect=RuntimeError("x")):
+            s, t, _ = self.req("POST", "/api/shots/render", {}, h)
+        self.assertEqual(s, 400)
+        self.assertIn("hosted version", t)
+        self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 200)  # cap of 1 still unspent
+
     def test_admin_wrong_code(self):
         s, _, r = self.req("POST", "/admin", raw="code=bad",
                            headers={"Content-Type": "application/x-www-form-urlencoded"})
@@ -141,7 +150,7 @@ class ServerReviewTest(unittest.TestCase):
         with mock.patch("sys.stdout"):
             s, t, _ = self.req("GET", "/admin", headers={"Cookie": cookie})
         self.assertEqual(s, 200)
-        self.assertIn("could not be read", t)
+        self.assertIn("Maria", t)  # the corrupt line is skipped, not fatal
 
     def test_admin_limiter(self):
         form = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -194,8 +203,61 @@ class GateInactiveTest(ServerReviewTest):
     test_status_open = test_plan_locked_without_headers = test_plan_with_headers_runs_and_logs = None
     test_session_wrong_code = test_session_ok_logs_unlock = test_assets_list_gated = None
     test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
-    test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
+    test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
     test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+
+
+class HostedNoCodeTest(ServerReviewTest):
+    gate = False
+
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.dict(os.environ, {"PORT": "9"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_hosted_without_code_fails_closed(self):
+        s, t, _ = self.req("POST", "/api/plan", {})
+        self.assertEqual((s, json.loads(t)), (401, {"error": "locked"}))
+        s, t, _ = self.req("GET", "/api/session/status")
+        self.assertIs(json.loads(t)["open"], False)
+
+    def test_hosted_without_code_removes_credentials(self):
+        auth = os.path.join(self.tmp.name, "auth.json")
+        with open(auth, "w") as f:
+            f.write("{}")
+        with mock.patch.dict(os.environ, {"CODEX_HOME": self.tmp.name}):
+            self.req("GET", "/api/session/status")
+        self.assertFalse(os.path.exists(auth))
+
+    test_status_open = test_plan_locked_without_headers = test_plan_with_headers_runs_and_logs = None
+    test_session_wrong_code = test_session_ok_logs_unlock = test_assets_list_gated = None
+    test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
+    test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
+    test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+
+
+class MediaTest(unittest.TestCase):
+    def test_absolute_media_uses_port_and_demo(self):
+        with mock.patch.dict(os.environ, {"PORT": "9123"}):
+            out = server._absolute_media({"a": "/assets/x.jpg", "b": ["/demo/media/x.jpg"]})
+        self.assertEqual(out, {"a": "http://127.0.0.1:9123/assets/x.jpg", "b": ["http://127.0.0.1:9123/demo/media/x.jpg"]})
+
+    def test_demo_static_served_and_confined(self):
+        env = {"REVIEW_DATA_DIR": tempfile.gettempdir()}
+        with mock.patch.dict(os.environ, env), mock.patch.object(server.Handler, "log_message", lambda *a: None):
+            httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+            threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            try:
+                def get(p):
+                    c = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=10)
+                    c.request("GET", p)
+                    r = c.getresponse(); r.read(); c.close()
+                    return r.status
+                self.assertEqual(get("/demo/index.json"), 200)
+                self.assertEqual(get("/demo/../../server.py"), 404)
+            finally:
+                httpd.shutdown(); httpd.server_close()
 
 
 if __name__ == "__main__":

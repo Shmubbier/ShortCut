@@ -35,6 +35,15 @@ def active() -> bool:
     return bool(os.environ.get("REVIEWER_CODE"))
 
 
+def hosted() -> bool:
+    return bool(os.environ.get("PORT"))  # Railway sets PORT; the laptop and the demo instance do not
+
+
+def locked_down() -> bool:
+    """Hosted without a reviewer code: fail closed (every gated route answers locked)."""
+    return hosted() and not active()
+
+
 def expires_at():
     global _warned
     raw = os.environ.get("REVIEW_EXPIRES_AT", "")
@@ -109,7 +118,13 @@ def read_log() -> list:
         lines = _log_path().read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         return []
-    return [json.loads(l) for l in reversed(lines) if l.strip()]
+    out = []
+    for l in reversed(lines):
+        try:
+            out.append(json.loads(l))
+        except ValueError:  # a truncated or corrupt line must not blank /admin or the CSV
+            continue
+    return out
 
 
 def log_csv() -> str:
@@ -125,7 +140,7 @@ def _auth_path() -> Path:
 
 
 def expire_credentials() -> bool:
-    if not active() or is_open():
+    if not (active() or hosted()) or is_open():
         return False
     p = _auth_path()
     if p.exists():

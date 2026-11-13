@@ -15,19 +15,23 @@ Note: `web/vercel.json` currently contains the placeholder `https://REPLACE-WITH
 |---|---|
 | `REVIEWER_CODE` | shared with panelists, at least 10 characters |
 | `ADMIN_CODE` | owner only, at least 16 characters |
-| `REVIEW_EXPIRES_AT` | ISO 8601 with timezone, 7 days after you send the email, e.g. `2026-11-21T18:00:00+08:00` |
+| `REVIEW_EXPIRES_AT` | set this right before you send the email (step 7): ISO 8601 with timezone, 7 days later, e.g. `2026-11-21T18:00:00+08:00` |
 | `CODEX_AUTH_JSON` | optional fallback seed: contents of your laptop's `~/.codex/auth.json` |
 
 The image already sets `BLOCKCUT_AI=codex`, `CODEX_HOME=/data/codex`, `REVIEW_DATA_DIR=/data`.
 
 ## 3. Server's own Codex sign-in
-Open the service's shell in Railway and run:
+Use the Railway CLI from Git Bash (all commands in this runbook are for Git Bash):
 
 ```bash
-CODEX_HOME=/data/codex codex login --device-auth
+npm i -g @railway/cli
+railway login
+railway link        # pick the project and the service
+railway ssh         # opens a shell inside the container
+CODEX_HOME=/data/codex codex login --device-auth   # run this inside that shell
 ```
 
-It prints a code; enter it in your browser. This keeps the server's sign-in separate from your laptop's.
+If your Railway dashboard shows a shell for the service, that works too. The login prints a code; enter it in your browser. This keeps the server's sign-in separate from your laptop's.
 
 ## 4. Copy the public URL
 Service > Settings > Networking > generate a domain, e.g. `https://shortcut-production.up.railway.app`.
@@ -40,7 +44,7 @@ From the repo root:
 ```
 
 This rewrites `web/vercel.json` (api, assets, media, music, footage, models3d, renders, `/admin`; never `/demo` or `/_app`), commits and pushes.
-Add `--no-push` to only write the file. Confirm the Vercel deployment (Root Directory `web`) finished.
+Vercel deploys from `main`, so push or merge there. Add `--no-push` to only write the file. Confirm the Vercel deployment (Root Directory `web`) finished.
 
 ## 6. Test
 - Open `https://<vercel-domain>/demo/`: the three demo videos play without a code.
@@ -58,10 +62,12 @@ Subject: ShortCut: hackathon review link (valid until <DATE>)
 >
 > With it you can generate a video from a topic, edit it, add voice, and export. It works for 7 days, until <DATE>.
 > Without the code you can still open the three demo videos.
+> If the code says invalid, wait a minute and try again.
 
 ## 8. Usage log
 `https://<vercel-domain>/admin`, enter the admin code. The table is in Manila time; "Download CSV" exports it.
 
 ## 9. Ending
-- Early: set `REVIEW_EXPIRES_AT` in Railway to a past time (or remove `REVIEWER_CODE`).
+- Early: set `REVIEW_EXPIRES_AT` in Railway to a past time. Do not just remove `REVIEWER_CODE`; keep it set until the service is gone (the server also fails closed if it is missing on Railway).
 - Automatically: after the window the server deletes `/data/codex/auth.json` and refuses live requests; the site stays in demo mode.
+- After the window: delete the `CODEX_AUTH_JSON` variable in Railway. After downloading the CSV from `/admin`, remove the Railway service and its volume.
