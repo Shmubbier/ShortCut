@@ -1275,6 +1275,11 @@ SLOW_ROUTES = {"/api/plan", "/api/edit", "/api/voice", "/api/assets/find", "/api
 GATED = {"/api/plan", "/api/edit", "/api/voice", "/api/assets", "/api/assets/find", "/api/assets/search", "/api/assets/import",
          "/api/assets/scrape", "/api/assets/upload", "/api/assets/delete", "/api/render", "/api/styles/from-url",
          "/api/styles/delete", "/api/shots/render"}
+# Only calls that spend AI or credits use the daily cap; the rest (asset list, upload, delete...) just need a valid code.
+SPEND = {"/api/plan", "/api/edit", "/api/voice", "/api/assets/find", "/api/assets/search", "/api/styles/from-url", "/api/render",
+         "/api/footage/transcribe", "/api/footage/storyboard", "/api/shots/render"}
+ADMIN_FAILS: dict = {}  # client -> (wrong count, locked_until monotonic); in memory only
+ADMIN_LOCK = threading.Lock()
 ADMIN_TOKENS: set = set()  # in memory: a restart signs the admin out
 MANILA = timezone(timedelta(hours=8))
 
@@ -1319,9 +1324,10 @@ ADMIN_LOGIN = ("<!doctype html><meta charset=utf-8><title>ShortCut admin</title>
 
 class Handler(BaseHTTPRequestHandler):
     def client_addr(self):
-        # Behind Vercel/Railway the socket peer is the proxy; the first X-Forwarded-For entry is the visitor. Limiter key only.
+        # Behind Vercel/Railway the socket peer is the proxy. Limiter key only, never logged.
+        # Use the LAST entry: it is appended by the platform's own edge proxy; earlier entries are client-forgeable.
         fwd = self.headers.get("X-Forwarded-For", "")
-        return fwd.split(",")[0].strip() or self.client_address[0]
+        return fwd.split(",")[-1].strip() or self.client_address[0]
 
     def gate(self, path):
         """None = proceed (ungated or gate off); (name, action) = proceed and log; False = already answered 401/429."""
@@ -1329,7 +1335,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         review.expire_credentials()
         ok, name = review.check(self.headers.get("X-Reviewer-Code", ""), self.headers.get("X-Reviewer-Name", ""), self.client_addr())
-        capped = ok and not review.allow_action()
+        capped = ok and path in SPEND and not review.allow_action()
         if not ok or capped:
             # Drain the unread body first: closing a socket with unread data resets the connection and the client loses the reply.
             self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
@@ -1383,8 +1389,18 @@ class Handler(BaseHTTPRequestHandler):
         length = min(int(self.headers.get("Content-Length", 0)), 10_000)
         form = parse_qs(self.rfile.read(length).decode("utf-8", "replace"))
         code, real = form.get("code", [""])[0], os.environ.get("ADMIN_CODE", "")
-        if not real or not hmac.compare_digest(code.encode(), real.encode()):
-            return self.send_html(ADMIN_LOGIN, 401)
+        client = self.client_addr()
+        with ADMIN_LOCK:
+            count, until = ADMIN_FAILS.get(client, (0, 0.0))
+            if until > time.monotonic():
+                return self.send_html("Too many tries, wait a minute", 429, "text/plain; charset=utf-8")
+            if until:
+                count = 0
+            if not real or not hmac.compare_digest(code.encode(), real.encode()):
+                count += 1
+                ADMIN_FAILS[client] = (count, time.monotonic() + 60 if count >= 5 else 0.0)
+                return self.send_html(ADMIN_LOGIN, 401)
+            ADMIN_FAILS.pop(client, None)
         token = secrets.token_urlsafe(32)
         ADMIN_TOKENS.add(token)
         self.send_html("", 303, extra=[("Location", "/admin"),
@@ -1553,7 +1569,11 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     # Railway sets PORT and needs all interfaces; on the laptop stay on localhost (parallel agents use BLOCKCUT_PORT).
     host, port = ("0.0.0.0", int(os.environ["PORT"])) if os.environ.get("PORT") else ("127.0.0.1", int(os.environ.get("BLOCKCUT_PORT", "8787")))
+    if len(os.environ.get("ADMIN_CODE", "")) in range(1, 16):
+        print("warning: ADMIN_CODE is shorter than 16 characters")
     if review.active():
+        if len(os.environ["REVIEWER_CODE"]) < 10:
+            print("warning: REVIEWER_CODE is shorter than 10 characters")
         review.expires_at()  # prints the warning at boot if REVIEW_EXPIRES_AT is bad
         review.seed_credentials()
         review.expire_credentials()

@@ -31,6 +31,7 @@ class ServerReviewTest(unittest.TestCase):
             os.environ.pop("REVIEWER_CODE", None)
         review._reset()
         server.ADMIN_TOKENS.clear()
+        server.ADMIN_FAILS.clear()
         stub = mock.patch.dict(server.ROUTES, {"/api/plan": lambda body: {"title": "stub", "scenes": []}})
         stub.start()
         self.addCleanup(stub.stop)
@@ -142,6 +143,35 @@ class ServerReviewTest(unittest.TestCase):
         self.assertEqual(s, 200)
         self.assertIn("could not be read", t)
 
+    def test_admin_limiter(self):
+        form = {"Content-Type": "application/x-www-form-urlencoded"}
+        for _ in range(5):
+            self.assertEqual(self.req("POST", "/admin", raw="code=bad", headers=form)[0], 401)
+        s, t, _ = self.req("POST", "/admin", raw="code=" + ADMIN, headers=form)
+        self.assertEqual(s, 429)
+        self.assertIn("Too many tries", t)
+
+    def test_limiter_ignores_spoofed_first_hop(self):
+        for i in range(5):
+            h = {"X-Reviewer-Code": "wrong", "X-Reviewer-Name": "Maria", "X-Forwarded-For": f"9.9.9.{i}, 1.2.3.4"}
+            self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 401)
+        h = {"X-Reviewer-Code": "test-code", "X-Reviewer-Name": "Maria", "X-Forwarded-For": "8.8.8.8, 1.2.3.4"}
+        self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 401)
+
+    def test_assets_list_does_not_use_cap(self):
+        h = {"X-Reviewer-Code": "test-code", "X-Reviewer-Name": "Maria"}
+        with mock.patch.dict(os.environ, {"REVIEW_DAILY_CAP": "1"}):
+            self.assertEqual(self.req("GET", "/api/assets", headers=h)[0], 200)
+            self.assertEqual(self.req("GET", "/api/assets", headers=h)[0], 200)
+            self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 200)
+
+    def test_expired_window_locks(self):
+        h = {"X-Reviewer-Code": "test-code", "X-Reviewer-Name": "Maria"}
+        past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        with mock.patch.dict(os.environ, {"REVIEW_EXPIRES_AT": past}):
+            s, t, _ = self.req("POST", "/api/plan", {}, h)
+        self.assertEqual((s, json.loads(t)), (401, {"error": "locked"}))
+
     def test_csv(self):
         cookie = self.admin_cookie()
         s, t, r = self.req("GET", "/admin/log.csv", headers={"Cookie": cookie})
@@ -165,6 +195,7 @@ class GateInactiveTest(ServerReviewTest):
     test_session_wrong_code = test_session_ok_logs_unlock = test_assets_list_gated = None
     test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
     test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
+    test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
 
 
 if __name__ == "__main__":
