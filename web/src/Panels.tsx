@@ -122,7 +122,7 @@ function StyleCard({ s, current, busy, onRestyle, onDelete }: { s: SavedStyle; c
   )
 }
 
-export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy }: Edit & { tileProps: (t: Tile) => object; onRestyle: (s: SavedStyle) => void; busy: boolean }) {
+export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy, locked }: Edit & { tileProps: (t: Tile) => object; onRestyle: (s: SavedStyle) => void; busy: boolean; locked?: () => void }) {
   const [mine, setMine] = useState<SavedStyle[]>([])
   useEffect(() => {
     const load = () => fetch('/api/styles').then((r) => r.json()).then((all: SavedStyle[]) => setMine(all.filter((x) => x.custom))).catch(() => {})
@@ -143,7 +143,7 @@ export function StylePanel({ plan, change, snapshot, tileProps, onRestyle, busy 
       <h3>Your styles</h3>
       <small className="tip">Styles learned from YouTube videos: their structure, writing and cut rhythm. Restyle rewrites this video in one.</small>
       {mine.map((x) => <StyleCard key={x.id} s={x} current={plan.contentStyle === x.id} busy={busy} onRestyle={() => onRestyle(x)} onDelete={() => remove(x)} />)}
-      <StyleFromUrl />
+      <StyleFromUrl locked={locked} />
       <label>Visual style
         <select value={plan.style} onChange={(e) => { snapshot(); change({ ...plan, style: e.target.value as Style }) }}>
           {(Object.keys(STYLES) as Style[]).map((k) => <option key={k} value={k}>{STYLES[k].label}</option>)}

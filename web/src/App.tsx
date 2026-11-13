@@ -618,7 +618,7 @@ export default function App() {
         <Flyout title={ICONS[panel].label} onClose={() => setPanel(null)} wide={panel === 'assets'}>
           {panel === 'assets' && assetsPanel}
           {panel === 'script' && plan && <ScriptPanel plan={plan} change={change} snapshot={snapshot} sel={sel} onSelect={select} />}
-          {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} busy={!!busy}
+          {panel === 'style' && plan && <StylePanel plan={plan} change={change} snapshot={snapshot} tileProps={tileProps} busy={!!busy} locked={mode === 'demo' ? () => needsCode('Learning a style from YouTube') : undefined}
             onRestyle={(st) => { snapshot(); prompt(`Restyle this video as “${st.label}”`, null, { content: st.id }) }} />}
           {panel === 'settings' && plan && <SettingsPanel plan={plan} change={(p) => {
             if (p.voiceRate !== plan.voiceRate) p = { ...p, scenes: p.scenes.map((s) => ({ ...s, audio: null, words: s.media?.type === 'video' && !s.audio ? s.words : [] })) }
