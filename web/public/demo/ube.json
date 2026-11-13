@@ -1,0 +1,1053 @@
+{
+ "title": "Why Filipinos Love Ube",
+ "style": "3d",
+ "pace": "punchy",
+ "aspect": "9:16",
+ "captions": true,
+ "contentStyle": "explainer",
+ "theme": {
+  "palette": "ube"
+ },
+ "styleOptions": [
+  "3d",
+  "editorial",
+  "2d"
+ ],
+ "styleWhy": "A tactile 3D ube root and dessert spread makes the food’s vivid color and texture the visual hook.",
+ "music": {
+  "id": "sunny-pop",
+  "title": "Sunny Pop",
+  "mood": "upbeat, bright, playful, lifestyle, food, how-to",
+  "bpm": 118,
+  "url": "/demo/media/sunny-pop.wav",
+  "volume": 0.5
+ },
+ "musicOptions": [
+  "sunny-pop",
+  "lofi-merienda",
+  "tropical-ride"
+ ],
+ "musicWhy": "Bright, upbeat pop suits a quick food explainer with a warm, celebratory feel.",
+ "scenes": [
+  {
+   "id": "9455a888",
+   "kind": "title",
+   "headline": "Why Ube?",
+   "sub": "A Filipino favorite",
+   "value": "",
+   "transition": "whip",
+   "effects": [
+    "highlight"
+   ],
+   "asset": "/demo/media/ube-halaya-mashed-purple-yam-philippines-01.jpg",
+   "purpose": "Open with a question that connects ube’s striking color to its emotional pull.",
+   "voiceover": "Why does one purple dessert flavor feel so familiar, even before you take a bite?",
+   "delivery": "curious, punchy",
+   "importance": 3,
+   "title": "Purple Pull",
+   "role": "title",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-395e9448c252.wav",
+    "duration": 8.56
+   },
+   "words": [
+    {
+     "text": "Why",
+     "start": 0.0,
+     "end": 0.34
+    },
+    {
+     "text": "does",
+     "start": 0.34,
+     "end": 0.6
+    },
+    {
+     "text": "one",
+     "start": 0.6,
+     "end": 0.98
+    },
+    {
+     "text": "purple",
+     "start": 0.98,
+     "end": 1.58
+    },
+    {
+     "text": "dessert",
+     "start": 1.58,
+     "end": 1.94
+    },
+    {
+     "text": "flavor",
+     "start": 1.94,
+     "end": 2.36
+    },
+    {
+     "text": "feel",
+     "start": 2.36,
+     "end": 2.82
+    },
+    {
+     "text": "so",
+     "start": 2.82,
+     "end": 3.3
+    },
+    {
+     "text": "familiar,",
+     "start": 3.3,
+     "end": 4.1
+    },
+    {
+     "text": "even",
+     "start": 4.5,
+     "end": 5.4
+    },
+    {
+     "text": "before",
+     "start": 5.4,
+     "end": 6.16
+    },
+    {
+     "text": "you",
+     "start": 6.16,
+     "end": 6.88
+    },
+    {
+     "text": "take",
+     "start": 6.88,
+     "end": 7.48
+    },
+    {
+     "text": "a",
+     "start": 7.48,
+     "end": 7.88
+    },
+    {
+     "text": "bite?",
+     "start": 7.88,
+     "end": 8.38
+    }
+   ],
+   "model": null,
+   "captionSource": "whisper"
+  },
+  {
+   "id": "a9428dd4",
+   "kind": "fact",
+   "headline": "Rooted in home",
+   "sub": "Ube is purple yam",
+   "value": "",
+   "transition": "cut",
+   "effects": [
+    "punch"
+   ],
+   "asset": "/demo/media/dioscorea-alata-purple-yam-tuber-mindanao-philip.jpg",
+   "purpose": "Ground the story in ube’s identity as a familiar Filipino crop and ingredient.",
+   "voiceover": "Ube is a purple yam with deep roots in Filipino food, grown and enjoyed across generations.",
+   "delivery": "warm, assured",
+   "importance": 2,
+   "title": "A Filipino Root",
+   "role": "narration",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-4e4354b4267e.wav",
+    "duration": 8.88
+   },
+   "words": [
+    {
+     "text": "Hehehe,",
+     "start": 0.0,
+     "end": 0.62
+    },
+    {
+     "text": "is",
+     "start": 2.1,
+     "end": 2.46
+    },
+    {
+     "text": "a",
+     "start": 2.46,
+     "end": 2.62
+    },
+    {
+     "text": "purple",
+     "start": 2.62,
+     "end": 3.04
+    },
+    {
+     "text": "lamb",
+     "start": 3.04,
+     "end": 3.38
+    },
+    {
+     "text": "with",
+     "start": 3.38,
+     "end": 3.74
+    },
+    {
+     "text": "deep",
+     "start": 3.74,
+     "end": 4.08
+    },
+    {
+     "text": "roots",
+     "start": 4.08,
+     "end": 4.44
+    },
+    {
+     "text": "in",
+     "start": 4.44,
+     "end": 4.76
+    },
+    {
+     "text": "Filipino",
+     "start": 4.76,
+     "end": 5.18
+    },
+    {
+     "text": "food,",
+     "start": 5.18,
+     "end": 5.92
+    },
+    {
+     "text": "grown",
+     "start": 6.12,
+     "end": 6.32
+    },
+    {
+     "text": "and",
+     "start": 6.32,
+     "end": 6.64
+    },
+    {
+     "text": "enjoyed",
+     "start": 6.64,
+     "end": 7.12
+    },
+    {
+     "text": "across",
+     "start": 7.12,
+     "end": 7.6
+    },
+    {
+     "text": "generations.",
+     "start": 7.6,
+     "end": 8.4
+    }
+   ],
+   "model": null,
+   "captionSource": "whisper"
+  },
+  {
+   "id": "6319c097",
+   "kind": "fact",
+   "headline": "Dessert staple",
+   "sub": "Halaya · halo-halo · ice cream",
+   "value": "",
+   "transition": "slide",
+   "effects": [
+    "highlight"
+   ],
+   "asset": "/demo/media/halo-halo-01.jpg",
+   "purpose": "Show how ube appears in several beloved Filipino desserts.",
+   "voiceover": "You’ll find it turned into rich halaya, folded into halo-halo, or churned into ice cream.",
+   "delivery": "lively, inviting",
+   "importance": 2,
+   "title": "Many Forms",
+   "role": "image",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-0779ce1ec40e.wav",
+    "duration": 10.96
+   },
+   "words": [
+    {
+     "text": "You'll",
+     "start": 2.1,
+     "end": 2.9
+    },
+    {
+     "text": "find",
+     "start": 2.9,
+     "end": 3.2
+    },
+    {
+     "text": "it",
+     "start": 3.2,
+     "end": 3.4
+    },
+    {
+     "text": "turned",
+     "start": 3.4,
+     "end": 3.68
+    },
+    {
+     "text": "into",
+     "start": 3.68,
+     "end": 3.98
+    },
+    {
+     "text": "Richelaya,",
+     "start": 3.98,
+     "end": 4.68
+    },
+    {
+     "text": "folded",
+     "start": 5.2,
+     "end": 5.44
+    },
+    {
+     "text": "into",
+     "start": 5.44,
+     "end": 5.88
+    },
+    {
+     "text": "Halo",
+     "start": 5.88,
+     "end": 7.52
+    },
+    {
+     "text": "Hollow,",
+     "start": 7.52,
+     "end": 7.96
+    },
+    {
+     "text": "or",
+     "start": 8.5,
+     "end": 8.94
+    },
+    {
+     "text": "churned",
+     "start": 8.94,
+     "end": 9.78
+    },
+    {
+     "text": "into",
+     "start": 9.78,
+     "end": 10.08
+    },
+    {
+     "text": "ice",
+     "start": 10.08,
+     "end": 10.4
+    },
+    {
+     "text": "cream.",
+     "start": 10.4,
+     "end": 10.76
+    }
+   ],
+   "model": null,
+   "captionSource": "whisper"
+  },
+  {
+   "id": "aece2992",
+   "kind": "fact",
+   "headline": "More than color",
+   "sub": "Sweet, earthy, gently nutty",
+   "value": "",
+   "transition": "zoom",
+   "effects": [
+    "punch"
+   ],
+   "asset": "/demo/media/8aube-cake.jpg",
+   "purpose": "Explain that the appeal comes from flavor as well as its unmistakable look.",
+   "voiceover": "That vivid color catches your eye, while ube’s mellow sweetness and earthy, nutty notes keep you coming back.",
+   "delivery": "sensory, warm",
+   "importance": 2,
+   "title": "The Flavor",
+   "role": "narration",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-eff5754641ef.wav",
+    "duration": 9.6
+   },
+   "words": [
+    {
+     "text": "That",
+     "start": 0.0,
+     "end": 0.4
+    },
+    {
+     "text": "vivid",
+     "start": 0.4,
+     "end": 0.92
+    },
+    {
+     "text": "color",
+     "start": 0.92,
+     "end": 1.42
+    },
+    {
+     "text": "catches",
+     "start": 1.42,
+     "end": 2.0
+    },
+    {
+     "text": "your",
+     "start": 2.0,
+     "end": 2.3
+    },
+    {
+     "text": "eye,",
+     "start": 2.3,
+     "end": 2.7
+    },
+    {
+     "text": "while",
+     "start": 3.76,
+     "end": 4.18
+    },
+    {
+     "text": "Ube's",
+     "start": 4.18,
+     "end": 4.86
+    },
+    {
+     "text": "mellow",
+     "start": 4.86,
+     "end": 5.16
+    },
+    {
+     "text": "sweetness",
+     "start": 5.16,
+     "end": 5.68
+    },
+    {
+     "text": "and",
+     "start": 5.68,
+     "end": 5.98
+    },
+    {
+     "text": "earthy",
+     "start": 5.98,
+     "end": 6.58
+    },
+    {
+     "text": "nutty",
+     "start": 6.58,
+     "end": 7.4
+    },
+    {
+     "text": "notes",
+     "start": 7.4,
+     "end": 7.76
+    },
+    {
+     "text": "keep",
+     "start": 7.76,
+     "end": 8.44
+    },
+    {
+     "text": "you",
+     "start": 8.44,
+     "end": 8.68
+    },
+    {
+     "text": "coming",
+     "start": 8.68,
+     "end": 8.98
+    },
+    {
+     "text": "back.",
+     "start": 8.98,
+     "end": 9.38
+    }
+   ],
+   "model": null,
+   "captionSource": "whisper"
+  },
+  {
+   "id": "90e8b224",
+   "kind": "fact",
+   "headline": "Naturally purple",
+   "sub": "Anthocyanins give ube its hue",
+   "value": "",
+   "transition": "cut",
+   "effects": [
+    "highlight"
+   ],
+   "asset": "/demo/media/ube-ice-cream-philippines-01.jpg",
+   "purpose": "Reveal the natural plant pigments behind ube’s signature purple.",
+   "voiceover": "The yam’s purple comes from anthocyanins, plant pigments that also color foods like blueberries.",
+   "delivery": "clear, fascinated",
+   "importance": 2,
+   "title": "Color From Nature",
+   "role": "narration",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-56580d683684.wav",
+    "duration": 5.76
+   },
+   "words": [
+    {
+     "text": "The",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "Yams",
+     "start": 0.18,
+     "end": 0.48
+    },
+    {
+     "text": "Purple",
+     "start": 0.48,
+     "end": 0.84
+    },
+    {
+     "text": "comes",
+     "start": 0.84,
+     "end": 1.14
+    },
+    {
+     "text": "from",
+     "start": 1.14,
+     "end": 1.42
+    },
+    {
+     "text": "anthocyanins,",
+     "start": 1.42,
+     "end": 2.4
+    },
+    {
+     "text": "plant",
+     "start": 2.68,
+     "end": 2.9
+    },
+    {
+     "text": "pigments",
+     "start": 2.9,
+     "end": 3.38
+    },
+    {
+     "text": "that",
+     "start": 3.38,
+     "end": 3.58
+    },
+    {
+     "text": "also",
+     "start": 3.58,
+     "end": 3.96
+    },
+    {
+     "text": "color",
+     "start": 3.96,
+     "end": 4.24
+    },
+    {
+     "text": "foods",
+     "start": 4.24,
+     "end": 4.62
+    },
+    {
+     "text": "like",
+     "start": 4.62,
+     "end": 4.96
+    },
+    {
+     "text": "blueberries.",
+     "start": 4.96,
+     "end": 5.42
+    }
+   ],
+   "captionSource": "whisper"
+  },
+  {
+   "id": "814b840a",
+   "kind": "stat",
+   "headline": "A global appetite",
+   "sub": "Philippine ube exports, 2025",
+   "value": "$3.06M",
+   "transition": "zoom",
+   "effects": [
+    "shake",
+    "highlight"
+   ],
+   "asset": "/demo/media/ube-purple-yam-ice-cream-taro-2026-02-11.jpg",
+   "purpose": "Show that ube’s reach now extends well beyond Filipino kitchens.",
+   "voiceover": "In 2025, Philippine ube and ube products brought in about three million dollars in exports.",
+   "delivery": "punchy, excited",
+   "importance": 3,
+   "title": "Purple Goes Global",
+   "role": "image",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-cd47acd3e20e.wav",
+    "duration": 7.44
+   },
+   "words": [
+    {
+     "text": "In",
+     "start": 0.0,
+     "end": 0.24
+    },
+    {
+     "text": "2025,",
+     "start": 0.24,
+     "end": 1.52
+    },
+    {
+     "text": "Philippine",
+     "start": 2.2,
+     "end": 2.6
+    },
+    {
+     "text": "UAB",
+     "start": 2.6,
+     "end": 3.1
+    },
+    {
+     "text": "and",
+     "start": 3.1,
+     "end": 3.5
+    },
+    {
+     "text": "UBAY",
+     "start": 3.5,
+     "end": 3.98
+    },
+    {
+     "text": "products",
+     "start": 3.98,
+     "end": 4.46
+    },
+    {
+     "text": "brought",
+     "start": 4.46,
+     "end": 4.74
+    },
+    {
+     "text": "in",
+     "start": 4.74,
+     "end": 4.94
+    },
+    {
+     "text": "about",
+     "start": 4.94,
+     "end": 5.24
+    },
+    {
+     "text": "$3",
+     "start": 5.24,
+     "end": 5.68
+    },
+    {
+     "text": "million",
+     "start": 5.68,
+     "end": 6.14
+    },
+    {
+     "text": "in",
+     "start": 6.14,
+     "end": 6.74
+    },
+    {
+     "text": "export.",
+     "start": 6.74,
+     "end": 7.22
+    }
+   ],
+   "captionSource": "whisper"
+  },
+  {
+   "id": "f6792a44",
+   "kind": "outro",
+   "headline": "A taste of home",
+   "sub": "Color, comfort, culture",
+   "value": "",
+   "transition": "slide",
+   "effects": [
+    "punch"
+   ],
+   "asset": "",
+   "purpose": "Deliver the takeaway: ube is loved for how it brings taste, memory, and Filipino identity together.",
+   "voiceover": "So ube isn’t just a pretty flavor: it carries familiar tastes, shared traditions, and a little taste of home.",
+   "delivery": "warm, resolved",
+   "importance": 3,
+   "title": "The Takeaway",
+   "role": "title",
+   "prop": null,
+   "audio": {
+    "url": "/demo/media/vo-bcce2181a243.wav",
+    "duration": 24.08
+   },
+   "words": [
+    {
+     "text": "So,",
+     "start": 0.0,
+     "end": 0.34
+    },
+    {
+     "text": "Ub",
+     "start": 0.76,
+     "end": 1.4
+    },
+    {
+     "text": "as",
+     "start": 1.4,
+     "end": 1.72
+    },
+    {
+     "text": "Mont",
+     "start": 1.72,
+     "end": 2.04
+    },
+    {
+     "text": "that",
+     "start": 2.04,
+     "end": 2.24
+    },
+    {
+     "text": "the",
+     "start": 2.24,
+     "end": 2.44
+    },
+    {
+     "text": "Wubelits",
+     "start": 2.44,
+     "end": 2.96
+    },
+    {
+     "text": "in",
+     "start": 2.96,
+     "end": 3.24
+    },
+    {
+     "text": "Fino,",
+     "start": 3.24,
+     "end": 3.64
+    },
+    {
+     "text": "it's",
+     "start": 4.36,
+     "end": 4.64
+    },
+    {
+     "text": "some",
+     "start": 4.64,
+     "end": 4.78
+    },
+    {
+     "text": "self",
+     "start": 4.78,
+     "end": 5.1
+    },
+    {
+     "text": "-forward,",
+     "start": 5.1,
+     "end": 5.48
+    },
+    {
+     "text": "it's",
+     "start": 6.18,
+     "end": 6.52
+    },
+    {
+     "text": "a",
+     "start": 6.52,
+     "end": 6.6
+    },
+    {
+     "text": "dig",
+     "start": 6.6,
+     "end": 6.84
+    },
+    {
+     "text": "-man",
+     "start": 6.84,
+     "end": 7.04
+    },
+    {
+     "text": "buy,",
+     "start": 7.04,
+     "end": 7.38
+    },
+    {
+     "text": "you",
+     "start": 7.72,
+     "end": 7.84
+    },
+    {
+     "text": "know?",
+     "start": 7.84,
+     "end": 8.0
+    },
+    {
+     "text": "If",
+     "start": 8.68,
+     "end": 8.88
+    },
+    {
+     "text": "they're...",
+     "start": 8.88,
+     "end": 10.44
+    },
+    {
+     "text": "...rubat,",
+     "start": 10.44,
+     "end": 10.88
+    },
+    {
+     "text": "uh...",
+     "start": 11.14,
+     "end": 11.94
+    },
+    {
+     "text": "...cass,",
+     "start": 11.94,
+     "end": 12.3
+    },
+    {
+     "text": "m",
+     "start": 12.56,
+     "end": 12.58
+    },
+    {
+     "text": "-cad",
+     "start": 12.58,
+     "end": 13.02
+    },
+    {
+     "text": "-joy",
+     "start": 13.02,
+     "end": 13.3
+    },
+    {
+     "text": "-cality.",
+     "start": 13.3,
+     "end": 13.86
+    },
+    {
+     "text": "So,",
+     "start": 14.46,
+     "end": 14.88
+    },
+    {
+     "text": "Wubat",
+     "start": 15.46,
+     "end": 16.08
+    },
+    {
+     "text": "isn't",
+     "start": 16.08,
+     "end": 16.56
+    },
+    {
+     "text": "just",
+     "start": 16.56,
+     "end": 16.8
+    },
+    {
+     "text": "a",
+     "start": 16.8,
+     "end": 16.92
+    },
+    {
+     "text": "pretty",
+     "start": 16.92,
+     "end": 17.16
+    },
+    {
+     "text": "flavor.",
+     "start": 17.16,
+     "end": 17.54
+    },
+    {
+     "text": "It",
+     "start": 18.14,
+     "end": 18.34
+    },
+    {
+     "text": "carries",
+     "start": 18.34,
+     "end": 18.74
+    },
+    {
+     "text": "familiar",
+     "start": 18.74,
+     "end": 19.16
+    },
+    {
+     "text": "taste,",
+     "start": 19.16,
+     "end": 19.54
+    },
+    {
+     "text": "shared",
+     "start": 20.1,
+     "end": 20.44
+    },
+    {
+     "text": "traditions,",
+     "start": 20.44,
+     "end": 20.94
+    },
+    {
+     "text": "and",
+     "start": 21.5,
+     "end": 21.92
+    },
+    {
+     "text": "a",
+     "start": 21.92,
+     "end": 22.26
+    },
+    {
+     "text": "little",
+     "start": 22.26,
+     "end": 23.0
+    },
+    {
+     "text": "taste",
+     "start": 23.0,
+     "end": 23.48
+    },
+    {
+     "text": "of",
+     "start": 23.48,
+     "end": 23.74
+    },
+    {
+     "text": "home.",
+     "start": 23.74,
+     "end": 23.92
+    },
+    {
+     "text": "So,",
+     "start": 23.92,
+     "end": 24.0
+    },
+    {
+     "text": "Wubelits",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "in",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "Fino,",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "it's",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "a",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "dig",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "-man",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "buy,",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "it's",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "a",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "dig",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "-man",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "buy,",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "it's",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "a",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "dig",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "-man",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "buy,",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "it's",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "a",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "dig",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "-man",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "buy,",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "you",
+     "start": 24.06,
+     "end": 24.06
+    },
+    {
+     "text": "know?",
+     "start": 24.06,
+     "end": 24.06
+    }
+   ],
+   "captionSource": "whisper"
+  }
+ ],
+ "research": "",
+ "voice": "qwen:ryan",
+ "exportUrl": "/demo/ube.mp4"
+}

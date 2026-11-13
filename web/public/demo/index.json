@@ -1,0 +1,82 @@
+{
+ "plans": [
+  {
+   "file": "ube.json",
+   "keywords": [
+    "ube",
+    "purple yam",
+    "halaya",
+    "halo-halo",
+    "halo halo"
+   ],
+   "title": "Why Filipinos Love Ube"
+  },
+  {
+   "file": "jeepney.json",
+   "keywords": [
+    "jeepney",
+    "jeep",
+    "king of the road",
+    "puv"
+   ],
+   "title": "Jeepney 101"
+  },
+  {
+   "file": "tower_defense.json",
+   "keywords": [
+    "tower defense",
+    "tower defence",
+    "td game",
+    "game",
+    "games",
+    "clash",
+    "plants vs"
+   ],
+   "title": "Tower Defense in 40 Seconds"
+  }
+ ],
+ "credits": [
+  {
+   "segment": 1,
+   "title": "Ube halaya - mashed purple yam (Philippines) 01.jpg",
+   "author": "Obsidian Soul",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File%3AUbe%20halaya%20-%20mashed%20purple%20yam%20%28Philippines%29%2001.jpg"
+  },
+  {
+   "segment": 2,
+   "title": "Dioscorea alata - Purple yam tuber - Mindanao, Philippines.jpg",
+   "author": "Obsidian Soul",
+   "license": "CC BY-SA 3.0",
+   "source": "https://commons.wikimedia.org/wiki/File%3ADioscorea%20alata%20-%20Purple%20yam%20tuber%20-%20Mindanao%2C%20Philippines.jpg"
+  },
+  {
+   "segment": 3,
+   "title": "Halo-halo 01.jpg",
+   "author": "Marife.altabano",
+   "license": "CC BY-SA 4.0",
+   "source": "https://commons.wikimedia.org/wiki/File%3AHalo-halo%2001.jpg"
+  },
+  {
+   "segment": 4,
+   "title": "8aUbe cake.jpg",
+   "author": "Judgefloro",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File%3A8aUbe%20cake.jpg"
+  },
+  {
+   "segment": 5,
+   "title": "Ube Ice Cream (Philippines) 01.jpg",
+   "author": "Obsidian Soul",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File%3AUbe%20Ice%20Cream%20%28Philippines%29%2001.jpg"
+  },
+  {
+   "segment": 6,
+   "title": "Ube Purple Yam Ice Cream - Taro 2026-02-11.jpg",
+   "author": "Andy Li",
+   "license": "CC0",
+   "source": "https://commons.wikimedia.org/wiki/File%3AUbe%20Purple%20Yam%20Ice%20Cream%20-%20Taro%202026-02-11.jpg"
+  }
+ ]
+}
