@@ -43,3 +43,6 @@ samples/*.ready.json
 
 # subagent-driven-development scratch (ledger, briefs, review packages)
 .superpowers/
+
+# hosted review codes (local only)
+deploy/*.local
