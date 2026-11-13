@@ -23,7 +23,7 @@ RUN cd web && npx remotion browser ensure
 # Whisper base model, loaded offline by server.py from models/faster-whisper-base.
 RUN mkdir -p models/faster-whisper-base && cd models/faster-whisper-base \
  && for f in config.json tokenizer.json vocabulary.txt model.bin; do \
-      curl -fL -o "$f" "https://huggingface.co/Systran/faster-whisper-base/resolve/main/$f"; done
+      curl -fL --retry 5 --retry-delay 5 --retry-all-errors -o "$f" "https://huggingface.co/Systran/faster-whisper-base/resolve/main/$f"; done
 
 COPY . .
 
