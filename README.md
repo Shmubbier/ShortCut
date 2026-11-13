@@ -44,6 +44,8 @@ AI backend, in order of preference (set in a git-ignored `.env`):
 - `BLOCKCUT_AI=codex` → Codex CLI first, Claude Code CLI as fallback
 - nothing → a signed-in Claude Code CLI, then Codex, then built-in demo samples
 
+Hosted review (Vercel + Railway, reviewer code, admin usage log): see [docs/review-runbook.md](docs/review-runbook.md).
+
 Optional: `ELEVENLABS_API_KEY` (Scribe v2 caption alignment), speech.cpp in `tools/speechcpp/` for Qwen voices.
 
 ## Repo map

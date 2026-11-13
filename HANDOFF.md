@@ -4,6 +4,8 @@ How to work on the repo: [AGENTS.md](AGENTS.md). This file is **where things sta
 
 ## Now (Nov 12, ~17:30): start here, Codex
 
+**Hosted review:** one-week Vercel (editor + `/demo/`) plus Railway (live backend, reviewer code, `/admin`) setup is in `docs/review-runbook.md`; `web/vercel.json` holds a placeholder Railway URL until `deploy/set_backend.py` is run.
+
 **Run it:** API `.venv/Scripts/python server.py` (:8787), UI `npm --prefix web run dev -- --port 5173` (open http://localhost:5173,
 Vite binds `localhost`, not 127.0.0.1). Both are in `.claude/launch.json` (`api`, `web`). Ports 8787/5173 are the user's live demo:
 don't restart them mid-generation.

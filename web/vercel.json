@@ -6,31 +6,39 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/api/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/api/:path*"
     },
     {
       "source": "/assets/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/assets/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/assets/:path*"
     },
     {
       "source": "/media/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/media/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/media/:path*"
     },
     {
       "source": "/music/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/music/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/music/:path*"
     },
     {
       "source": "/footage/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/footage/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/footage/:path*"
     },
     {
       "source": "/models3d/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/models3d/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/models3d/:path*"
     },
     {
       "source": "/renders/:path*",
-      "destination": "https://comparative-periodically-alerts-drove.trycloudflare.com/renders/:path*"
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/renders/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/admin"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://REPLACE-WITH-RAILWAY-URL.up.railway.app/admin/:path*"
     }
   ]
 }
