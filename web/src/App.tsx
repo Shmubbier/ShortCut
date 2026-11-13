@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
 import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
+import { DEMO_COOK_MS, loadDemoIndex, loadDemoPlan, matchDemo, type DemoEntry, type DemoIndex, type Mode } from './demo'
 import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, type Aspect, type Plan, type SceneData } from './video/Video'
 import './App.css'
@@ -136,7 +137,11 @@ export default function App() {
   const [heroError, setHeroError] = useState('')
   const [reveal, setReveal] = useState(Infinity) // cards shown so far during the reveal
   const [previewIn, setPreviewIn] = useState(!!saved?.plan)
-  const [toast, setToast] = useState<{ text: string; undo: boolean } | null>(null)
+  const [mode] = useState<Mode>('demo') // 'demo': ready videos, no backend; 'live' (reviewer code) is switched on later
+  const [unlockOpen, setUnlockOpen] = useState(false) // a later task renders the code dialog from this
+  void unlockOpen // ponytail: read by the dialog the next task adds; drop this line then
+  const [demoMiss, setDemoMiss] = useState<DemoIndex | null>(null) // topic matched no demo video: offer the ones we have
+  const [toast, setToast] = useState<{ text: string; undo: boolean; code?: boolean } | null>(null)
   const [style, setStyle] = useState<Style | 'auto'>('auto')
   const [content, setContent] = useState('auto') // content style id (explainer, story, listicle, …, or a custom one)
   const [contentStyles, setContentStyles] = useState<{ id: string; label: string; description: string; custom?: boolean }[]>([])
@@ -159,7 +164,9 @@ export default function App() {
   useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}); api('/api/models3d').then(setModels).catch(() => {}) }, [])
   useEffect(() => { if (panel === 'assets') api('/api/models3d').then(setModels).catch(() => {}) }, [panel, plan?.scenes.length]) // generation adds Polyfork models
   useEffect(() => {
-    const refresh = () => { api('/api/styles').then(setContentStyles).catch(() => {}) }
+    const refresh = () => {
+      api('/api/styles').then(setContentStyles).catch(() => fetch('/demo/styles.json').then((r) => r.json()).then(setContentStyles).catch(() => {})) // no backend: the bundled list
+    }
     refresh()
     window.addEventListener('blockcut-styles-updated', refresh)
     return () => window.removeEventListener('blockcut-styles-updated', refresh)
@@ -225,6 +232,7 @@ export default function App() {
 
   // Footage workflow (spec §3B): upload -> transcript (editable) -> storyboard. Endpoints per HANDOFF.md.
   async function uploadClip(f: File, transcribe = false) {
+    if (mode === 'demo') return needsCode('Footage upload')
     setBusy('upload')
     setAssetMsg(`Uploading ${f.name}…`)
     try {
@@ -297,9 +305,10 @@ export default function App() {
   // The hero card stays on screen and "cooks" (real stages + elapsed time) until the whole plan is ready.
   // Only then does it shrink into the assistant and the workspace animate in: the card-by-card population
   // is a presentation of finished data, so nobody stares at a half-empty workspace.
-  async function generate(text: string) {
-    const stages = [...(autoImages ? ['Finding images'] : []), 'Researching & writing the script']
-    setHeroError('')
+  async function generate(text: string, demo?: DemoEntry) {
+    const live = mode === 'live'
+    const stages = [...(autoImages && live ? ['Finding images'] : []), 'Researching & writing the script']
+    setHeroError(''); setDemoMiss(null)
     setBusy('gen')
     setGen({ stages, at: 0 })
     setCookStart(Date.now())
@@ -307,7 +316,7 @@ export default function App() {
     let completed = 0
     const stageDone = () => setGen({ stages, at: ++completed })
     try {
-      const imageTask: Promise<Asset[]> = autoImages ? api('/api/assets/find', { query: text, limit: 6 }).then((found: Asset[]) => {
+      const imageTask: Promise<Asset[]> = autoImages && live ? api('/api/assets/find', { query: text, limit: 6 }).then((found: Asset[]) => {
         setAssets((current) => [...current, ...found])
         say('ai', `Found ${found.length} images for “${text}” (ScrapeGraphAI web search).`, 'New video')
         stageDone()
@@ -317,7 +326,14 @@ export default function App() {
         stageDone()
         return []
       }) : Promise.resolve([])
-      const planTask: Promise<Plan & { note?: string }> = api('/api/plan', { topic: text, style, content, aspect, pace: 'punchy', assets })
+      const demoPlan = async (): Promise<Plan & { note?: string }> => {
+        const idx = await loadDemoIndex()
+        const entry = demo ?? matchDemo(text, idx)
+        if (!entry) { setDemoMiss(idx); throw new Error('no demo') }
+        await wait(DEMO_COOK_MS)
+        return loadDemoPlan(entry)
+      }
+      const planTask: Promise<Plan & { note?: string }> = (live ? api('/api/plan', { topic: text, style, content, aspect, pace: 'punchy', assets }) : demoPlan())
         .then((result: Plan & { note?: string }) => { stageDone(); return result })
       const [p, found] = await Promise.all([planTask, imageTask])
       if (found.length) {
@@ -343,8 +359,8 @@ export default function App() {
       await wait(500)
       say('ai', p.note ?? `Made ${p.scenes.length} segments.`, 'New video')
     } catch (e) {
-      say('ai', errText(e), 'New video')
-      setHeroError(errText(e))
+      if (!live && e instanceof Error && e.message === 'no demo') setHeroError('Live generation is for reviewers. Try one of the demo videos:')
+      else { say('ai', errText(e), 'New video'); setHeroError(errText(e)) }
     } finally {
       setReveal(Infinity)
       setGen(null)
@@ -352,9 +368,16 @@ export default function App() {
     }
   }
 
+  // Demo mode: anything that needs the backend shows this notice instead.
+  function needsCode(action: string) {
+    setAssetMsg(`${action} needs a reviewer code.`)
+    setToast({ text: 'Needs a reviewer code', undo: false, code: true })
+  }
+
   async function prompt(text: string, index = sel, extra: Record<string, unknown> = {}) {
     if (!text || busy) return
     if (!plan) return generate(text)
+    if (mode === 'demo') return needsCode('AI edits')
     const s = scopeOf(index)
     setBusy('ai')
     say('you', text, s)
@@ -372,6 +395,7 @@ export default function App() {
 
   async function voice(index: number | null) {
     if (!plan || busy) return
+    if (mode === 'demo') return needsCode('Voiceover')
     setBusy(index === null ? 'voice-all' : `voice-${index}`)
     try {
       const r = await api('/api/voice', { plan, index })
@@ -385,6 +409,7 @@ export default function App() {
 
   async function renderVideo() {
     if (!plan || busy) return
+    if (mode === 'demo') return needsCode('Rendering')
     setBusy('render')
     setRenderUrl('')
     setAssetMsg('Starting MP4 render…')
@@ -410,6 +435,7 @@ export default function App() {
 
   async function addFiles(files: FileList | null) {
     if (!files?.length) return
+    if (mode === 'demo') return needsCode('Uploading images')
     setAssetMsg('Uploading…')
     try {
       const added: Asset[] = []
@@ -423,6 +449,7 @@ export default function App() {
 
   async function scrape() {
     if (!scrapeUrl.trim()) return
+    if (mode === 'demo') return needsCode('Grabbing images from a page')
     setAssetMsg('Scraping images…')
     try {
       const added: Asset[] = await api('/api/assets/scrape', { url: scrapeUrl.trim() })
@@ -437,6 +464,7 @@ export default function App() {
   // ScrapeGraphAI web search -> relevant images in the bucket; with assignTo, the best one goes on that segment.
   async function findImages(query: string, assignTo: number | null = null) {
     if (!query.trim() || busy) return
+    if (mode === 'demo') return needsCode('Image search')
     setBusy(assignTo === null ? 'find' : `find-${assignTo}`)
     setAssetMsg(`Searching the web for “${query}”…`)
     try {
@@ -453,6 +481,7 @@ export default function App() {
 
   async function searchMedia(query: string) {
     if (!query.trim() || busy || !searchKinds.length) return
+    if (mode === 'demo') return needsCode('Media search')
     setBusy('find'); setAssetMsg('Searching Commons, Openverse, NASA and image search…')
     try {
       const r = await api('/api/assets/search', { query, kinds: searchKinds, limit: 8 })
@@ -462,6 +491,7 @@ export default function App() {
   }
 
   async function importMedia(candidate: AssetCandidate) {
+    if (mode === 'demo') return needsCode('Importing media')
     setAssetMsg(`Importing ${candidate.title}…`)
     try {
       const item = await api('/api/assets/import', { candidate })
@@ -593,7 +623,7 @@ export default function App() {
           {panel === 'settings' && plan && <SettingsPanel plan={plan} change={(p) => {
             if (p.voiceRate !== plan.voiceRate) p = { ...p, scenes: p.scenes.map((s) => ({ ...s, audio: null, words: s.media?.type === 'video' && !s.audio ? s.words : [] })) }
             change(p)
-          }} snapshot={snapshot} voice={voice} busy={busy} onExport={download} onRender={renderVideo} renderUrl={renderUrl} />}
+          }} snapshot={snapshot} voice={voice} busy={busy} onExport={download} onRender={renderVideo} renderUrl={mode === 'demo' ? plan.exportUrl ?? '' : renderUrl} />}
           {!plan && panel !== 'assets' && <p className="tip">Available once the storyboard is ready.</p>}
         </Flyout>
       )}
@@ -671,12 +701,13 @@ export default function App() {
             </div>
             {newStyle && <div className="hero-style">
               <small className="tip">Paste a YouTube video and ShortCut learns its format, writing and cut rhythm (not its words or footage).</small>
-              <StyleFromUrl onDone={(st) => { setContent(st.id); setNewStyle(false) }} />
+              <StyleFromUrl onDone={(st) => { setContent(st.id); setNewStyle(false) }} locked={mode === 'demo' ? () => needsCode('Learning a style from YouTube') : undefined} />
             </div>}
             <label className="hero-footage">or start from your own video clip
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
             {heroError && <p className="err">{heroError}</p>}
+            {demoMiss && <div className="starters">{demoMiss.plans.map((d) => <button key={d.file} onClick={() => { setDemoMiss(null); generate(d.title, d) }}><b>{d.title}</b></button>)}</div>}
             </>
             )}
           </div>
@@ -734,7 +765,7 @@ export default function App() {
         )}
 
         {toast && (
-          <div className="toast" role="status">{toast.text}{toast.undo && <button className="link" onClick={undo}>Undo</button>}</div>
+          <div className="toast" role="status">{toast.text}{toast.undo && <button className="link" onClick={undo}>Undo</button>}{toast.code && <button className="link" onClick={() => { setToast(null); setUnlockOpen(true) }}>Enter code</button>}</div>
         )}
       </main>
 

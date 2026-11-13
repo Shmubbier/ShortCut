@@ -27,6 +27,7 @@ export type Plan = {
   title: string; style: Style; pace: 'punchy' | 'documentary'; aspect?: Aspect; theme?: ThemeChoice; captions?: boolean; captionStyle?: CaptionStyle; voice?: string; voiceRate?: number
   music?: Track | null; musicOptions?: string[]; musicWhy?: string; styleOptions?: Style[]; styleWhy?: string
   contentStyle?: string // content_styles.py id: explainer, story, listicle, clip, tutorial, showcase, news, comedy, documentary or custom
+  exportUrl?: string // demo plans: a pre-rendered MP4
   scenes: SceneData[]
 }
 

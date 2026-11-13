@@ -61,7 +61,7 @@ export type SavedStyle = { id: string; label: string; description?: string; vide
   measured?: { cuts_per_minute?: number; median_shot_seconds?: number }; source?: { url?: string; title?: string; channel?: string } }
 
 // YouTube link -> reusable style (server job); used on the start screen and in the Style panel.
-export function StyleFromUrl({ onDone }: { onDone?: (s: SavedStyle) => void }) {
+export function StyleFromUrl({ onDone, locked }: { onDone?: (s: SavedStyle) => void; locked?: () => void }) { // locked: demo mode, no backend
   const [refUrl, setRefUrl] = useState('')
   const [refJob, setRefJob] = useState<{ id?: string; status?: string; stage?: string; progress?: number; error?: string; style?: SavedStyle } | null>(null)
   const running = ['queued', 'running'].includes(refJob?.status ?? '')
@@ -87,7 +87,7 @@ export function StyleFromUrl({ onDone }: { onDone?: (s: SavedStyle) => void }) {
   }
   return (
     <div className="style-from-url">
-      <form className="row" onSubmit={(e) => { e.preventDefault(); if (refUrl && !running) start() }}>
+      <form className="row" onSubmit={(e) => { e.preventDefault(); if (locked) locked(); else if (refUrl && !running) start() }}>
         <input type="url" value={refUrl} onChange={(e) => setRefUrl(e.target.value)} placeholder="YouTube link (a video under 3 minutes)" aria-label="YouTube video link" />
         <button type="submit" disabled={!refUrl || running}>{running ? 'Studying…' : 'Create style'}</button>
       </form>
