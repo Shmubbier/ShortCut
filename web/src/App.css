@@ -186,3 +186,15 @@ header select, .ghost { border: 1.5px solid var(--ink); background: var(--card);
 .theme-pill button:hover { color: var(--ink); }
 .theme-pill button.on { background: var(--ink); color: var(--paper); }
 .theme-pill svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Reviewer access: unlock dialog and live chip (tokens work in both themes) */
+.unlock-back { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }
+.unlock { background: var(--card); color: var(--ink); border: 1px solid var(--muted); border-radius: 14px; padding: 20px; width: min(360px, 100%); display: grid; gap: 12px; }
+.unlock h2 { margin: 0; font-size: 18px; }
+.unlock label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.unlock input { background: var(--paper); color: var(--ink); border: 1px solid var(--muted); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+.unlock .err { margin: 0; }
+.unlock-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.unlock-actions button[type=submit] { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; }
+.live-chip { font-size: 12px; color: var(--ink); background: var(--card); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; display: inline-flex; gap: 8px; align-items: center; }
+.reviewer-link { margin-top: 4px; }

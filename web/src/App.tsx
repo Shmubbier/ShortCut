@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
 import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
+import { checkStatus, clearAccess, getAccess, reviewHeaders, saveAccess, unlock, untilText } from './review'
 import { DEMO_COOK_MS, loadDemoIndex, loadDemoPlan, matchDemo, type DemoEntry, type DemoIndex, type Mode } from './demo'
 import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, type Aspect, type Plan, type SceneData } from './video/Video'
@@ -19,9 +20,16 @@ type PanelId = 'assets' | 'script' | 'style' | 'settings'
 // Real generation stages (spec §4A): the bar advances when a stage actually finishes, not on a timer.
 type Gen = { stages: string[]; at: number }
 
+// Set by App while in live mode: called when live access ends or the backend fails, so the app drops back to demo.
+let onLiveLost: (() => void) | null = null
+
 async function api(path: string, body?: unknown) {
-  const r = await fetch(path, body === undefined ? undefined : { method: 'POST', body: JSON.stringify(body) })
+  const headers = reviewHeaders()
+  let r: Response
+  try { r = await fetch(path, { method: body === undefined ? 'GET' : 'POST', body: body === undefined ? undefined : JSON.stringify(body), headers }) }
+  catch (e) { onLiveLost?.(); throw e }
   const text = await r.text()
+  if (r.status === 401 || r.status === 429 || r.status >= 500) onLiveLost?.()
   if (!text) throw new Error('API server not running — start it with: .venv/Scripts/python server.py')
   if (!r.ok && !text.trimStart().startsWith('{')) throw new Error(`${r.status} ${r.statusText}`) // e.g. an HTML 404 for a route that doesn't exist yet
   const j = JSON.parse(text)
@@ -47,6 +55,36 @@ export const Logo = ({ size = 34 }: { size?: number }) => (
     <path d="M9 31 31 9" stroke="var(--accent)" strokeWidth="3.2" strokeLinecap="round" />
   </svg>
 )
+
+function UnlockDialog({ onClose, onDone }: { onClose: () => void; onDone: (name: string, expiresAt: string) => void }) {
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  const [err, setErr] = useState('')
+  const [pending, setPending] = useState(false)
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const n = name.trim()
+    if (n.length < 2 || n.length > 40) return setErr('Enter your name (2-40 characters)')
+    if (!code.trim()) return setErr('Enter the reviewer code')
+    setPending(true); setErr('')
+    const r = await unlock(code.trim(), n)
+    setPending(false)
+    if (!r.ok) return setErr(r.error)
+    saveAccess({ code: code.trim(), name: r.name })
+    onDone(r.name, r.expiresAt)
+  }
+  return (
+    <div className="unlock-back" onClick={onClose}>
+      <form className="unlock" role="dialog" aria-label="Reviewer access" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <h2>Reviewer access</h2>
+        <label>Code<input value={code} onChange={(e) => setCode(e.target.value)} autoFocus autoComplete="off" /></label>
+        <label>Your name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoComplete="off" /></label>
+        {err && <p className="err">{err}</p>}
+        <div className="unlock-actions"><button type="button" className="ghost" onClick={onClose}>Cancel</button><button type="submit" disabled={pending}>Unlock live generation</button></div>
+      </form>
+    </div>
+  )
+}
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
@@ -137,9 +175,10 @@ export default function App() {
   const [heroError, setHeroError] = useState('')
   const [reveal, setReveal] = useState(Infinity) // cards shown so far during the reveal
   const [previewIn, setPreviewIn] = useState(!!saved?.plan)
-  const [mode] = useState<Mode>('demo') // 'demo': ready videos, no backend; 'live' (reviewer code) is switched on later
-  const [unlockOpen, setUnlockOpen] = useState(false) // a later task renders the code dialog from this
-  void unlockOpen // ponytail: read by the dialog the next task adds; drop this line then
+  const [mode, setMode] = useState<Mode>('demo') // 'demo': ready videos, no backend; 'live': unlocked with a reviewer code
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [expiresAt, setExpiresAt] = useState('')
+  const [who, setWho] = useState('')
   const [demoMiss, setDemoMiss] = useState<DemoIndex | null>(null) // topic matched no demo video: offer the ones we have
   const [toast, setToast] = useState<{ text: string; undo: boolean; code?: boolean } | null>(null)
   const [style, setStyle] = useState<Style | 'auto'>('auto')
@@ -161,7 +200,27 @@ export default function App() {
   const planRef = useRef(plan)
   planRef.current = plan
 
-  useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}); api('/api/models3d').then(setModels).catch(() => {}) }, [])
+  // Live mode: a failure or ended access drops back to demo and keeps the open plan on screen.
+  useEffect(() => {
+    if (mode !== 'live') { onLiveLost = null; return }
+    onLiveLost = () => {
+      onLiveLost = null
+      setMode('demo')
+      setToast({ text: "Live access ended or is unavailable. You're back in demo mode; your video is kept.", undo: false })
+    }
+    return () => { onLiveLost = null }
+  }, [mode])
+  // On load: if the site is open and this browser remembers a code, quietly switch to live.
+  useEffect(() => {
+    const a = getAccess()
+    if (!a) return
+    checkStatus().then(async (st) => {
+      if (!st.open) return
+      const u = await unlock(a.code, a.name)
+      if (u.ok) { setWho(u.name); setExpiresAt(u.expiresAt); setMode('live') } else clearAccess()
+    })
+  }, [])
+  useEffect(() => { api('/api/assets').then(setAssets).catch(() => {}); api('/api/models3d').then(setModels).catch(() => {}) }, [mode])
   useEffect(() => { if (panel === 'assets') api('/api/models3d').then(setModels).catch(() => {}) }, [panel, plan?.scenes.length]) // generation adds Polyfork models
   useEffect(() => {
     const refresh = () => {
@@ -367,6 +426,11 @@ export default function App() {
       setBusy('')
     }
   }
+
+  const signOut = () => { clearAccess(); setMode('demo') }
+  const liveChip = mode === 'live' && (
+    <span className="live-chip">Live · {who}{expiresAt && ` · until ${untilText(expiresAt)}`} <button className="link" onClick={signOut}>Sign out</button></span>
+  )
 
   // Demo mode: anything that needs the backend shows this notice instead.
   function needsCode(action: string) {
@@ -633,6 +697,7 @@ export default function App() {
           <header>
             <b>{plan?.title ?? 'Generating…'}</b>
             {plan?.contentStyle && <span className="chip" title="Content style: ask the assistant to change it, e.g. 'make it a story'">{contentStyles.find((c) => c.id === plan.contentStyle)?.label ?? plan.contentStyle}</span>}
+            {liveChip}
             <button className="ghost" onClick={undo} disabled={!history.length}>Undo</button>
             <button className="ghost" onClick={newProject} disabled={!!gen}>New video</button>
           </header>
@@ -706,6 +771,7 @@ export default function App() {
             <label className="hero-footage">or start from your own video clip
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
+            {liveChip || <button className="link reviewer-link" onClick={() => setUnlockOpen(true)}>Reviewer access</button>}
             {heroError && <p className="err">{heroError}</p>}
             {demoMiss && <div className="starters">{demoMiss.plans.map((d) => <button key={d.file} onClick={() => { setDemoMiss(null); generate(d.title, d) }}><b>{d.title}</b></button>)}</div>}
             </>
@@ -764,6 +830,7 @@ export default function App() {
           </div>
         )}
 
+        {unlockOpen && <UnlockDialog onClose={() => setUnlockOpen(false)} onDone={(n, e) => { setWho(n); setExpiresAt(e); setMode('live'); setUnlockOpen(false); setToast(null); setAssetMsg('') }} />}
         {toast && (
           <div className="toast" role="status">{toast.text}{toast.undo && <button className="link" onClick={undo}>Undo</button>}{toast.code && <button className="link" onClick={() => { setToast(null); setUnlockOpen(true) }}>Enter code</button>}</div>
         )}
