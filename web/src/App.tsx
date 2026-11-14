@@ -2,11 +2,12 @@ import { Player, type PlayerRef } from '@remotion/player'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from './Canvas'
 import { Inspector } from './Inspector'
-import { Flyout, ScriptPanel, SettingsPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
+import { Flyout, ScriptPanel, SettingsPanel, SourcesPanel, StyleFromUrl, StylePanel, type Tile } from './Panels'
 import { checkStatus, clearAccess, getAccess, gfetch, saveAccess, setLiveLost, unlock, untilText } from './review'
 import { DEMO_COOK_MS, loadDemoIndex, loadDemoPlan, matchDemo, type DemoEntry, type DemoIndex, type Mode } from './demo'
 import { STYLES, type Style } from './video/theme'
 import { ASPECTS, dims, FPS, isEmpty, Main, planDuration, ROLES, sceneStarts, type Aspect, type Plan, type SceneData } from './video/Video'
+import { Tour, Welcome } from './Tour'
 import './App.css'
 import './studio.css'
 
@@ -16,7 +17,7 @@ type Clip = { url: string; name: string; duration?: number } // uploaded video f
 type Passage = { start: number; end: number; text: string; words?: { text: string; start: number; end: number }[] }
 type Item = Tile | { type: 'asset'; url: string; name: string } | { type: 'model'; url: string; name: string; license?: string; source?: string } | { type: 'clip'; url: string; name: string; duration?: number }
 type Msg = { who: 'you' | 'ai'; text: string; scope: string }
-type PanelId = 'assets' | 'script' | 'style' | 'settings'
+type PanelId = 'assets' | 'script' | 'style' | 'settings' | 'sources'
 // Real generation stages (spec §4A): the bar advances when a stage actually finishes, not on a timer.
 type Gen = { stages: string[]; at: number }
 
@@ -165,6 +166,8 @@ function ThemeToggle() {
   )
 }
 
+const TOURED_KEY = 'shortcut.toured'
+const toured = () => { try { return !!localStorage.getItem(TOURED_KEY) } catch { return true } }
 const SAVE_KEY = 'blockcut.project.v1' // storage key kept from the old name so saved projects survive
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as { plan: Plan | null; log: Msg[]; clips?: Clip[] } | null } catch { return null } })()
 // Footage endpoints are built on the server side (HANDOFF.md, Codex brief); a 404 means that part isn't installed yet.
@@ -174,6 +177,7 @@ const ICONS: Record<PanelId, { label: string; path: string }> = {
   assets: { label: 'Asset Library', path: 'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9.5a1.5 1.5 0 1 0 0-.01' },
   script: { label: 'Transcript / Script', path: 'M6 3h9l3 3v15H6zM9 9h6M9 13h6M9 17h4' },
   style: { label: 'Video Style', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.2-1-1.4-1-2.4 0-.8.7-1.5 1.5-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5zM7.5 11a1 1 0 1 0 0-.01M10 7.5a1 1 0 1 0 0-.01M14.5 7.5a1 1 0 1 0 0-.01' },
+  sources: { label: 'Sources', path: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1' },
   settings: { label: 'Project Settings', path: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 13.5l1.6 1.2-2 3.4-1.9-.7a7 7 0 0 1-2 1.2L14.8 21h-4l-.3-2.4a7 7 0 0 1-2-1.2l-1.9.7-2-3.4 1.6-1.2a7 7 0 0 1 0-2.4L4.6 9.9l2-3.4 1.9.7a7 7 0 0 1 2-1.2L10.8 3h4l.3 2.4a7 7 0 0 1 2 1.2l1.9-.7 2 3.4-1.6 1.2a7 7 0 0 1 0 2.4z' },
 }
 
@@ -198,6 +202,8 @@ export default function App() {
   const [mode, setMode] = useState<Mode>('demo') // 'demo': ready videos, no backend; 'live': unlocked with a reviewer code
   const [unlockOpen, setUnlockOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [onboard, setOnboard] = useState<'ask' | 'tour' | null>(() => (!getAccess() && !toured() ? 'ask' : null)) // first visit: welcome, then the tour
+  const tourAfterUnlock = useRef(false)
   const [expiresAt, setExpiresAt] = useState('')
   const [who, setWho] = useState('')
   const [demoMiss, setDemoMiss] = useState<DemoIndex | null>(null) // topic matched no demo video: offer the ones we have
@@ -447,6 +453,23 @@ export default function App() {
       setBusy('')
     }
   }
+
+  // The tour runs on the ready-made ube video, in demo or live mode alike.
+  async function startTour() {
+    try { localStorage.setItem(TOURED_KEY, '1') } catch { /* storage blocked */ }
+    try {
+      const idx = await loadDemoIndex()
+      const entry = idx.plans.find((d) => d.file === 'ube.json') ?? idx.plans[0]
+      setPlanRaw(await loadDemoPlan(entry))
+      setHistory([]); setSel(null); setInspOpen(false); setPanel(null); setAssistOpen(false); setReveal(Infinity); setPreviewIn(true)
+      setOnboard('tour')
+    } catch { setOnboard(null) }
+  }
+  function endTour(toPrompt: boolean) {
+    setOnboard(null)
+    if (toPrompt) { setPlanRaw(null); setHistory([]); setSel(null); setInspOpen(false); setPanel(null); setLog([]); setPreviewIn(false) }
+  }
+  const skipIntro = () => { try { localStorage.setItem(TOURED_KEY, '1') } catch { /* storage blocked */ } setOnboard(null) }
 
   const signOut = () => { clearAccess(); setMode('demo') }
   const liveChip = mode === 'live' && (
@@ -709,6 +732,7 @@ export default function App() {
             if (p.voiceRate !== plan.voiceRate) p = { ...p, scenes: p.scenes.map((s) => ({ ...s, audio: null, words: s.media?.type === 'video' && !s.audio ? s.words : [] })) }
             change(p)
           }} snapshot={snapshot} voice={voice} busy={busy} onExport={download} onRender={renderVideo} renderUrl={mode === 'demo' ? plan.exportUrl ?? '' : renderUrl} />}
+          {panel === 'sources' && plan && <SourcesPanel plan={plan} assets={assets} />}
           {!plan && panel !== 'assets' && <p className="tip">Available once the storyboard is ready.</p>}
         </Flyout>
       )}
@@ -807,6 +831,7 @@ export default function App() {
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
             {liveChip && <div className="review-live">{liveChip}</div>}
+            <button className="link tour-link" onClick={startTour}>New here? Take the 1-minute tour</button>
             {heroError && <p className="err">{heroError}</p>}
             {demoMiss && <div className="starters">{demoMiss.plans.map((d) => <button key={d.file} onClick={() => { setDemoMiss(null); generate(d.title, d) }}><b>{d.title}</b></button>)}</div>}
             </>
@@ -866,7 +891,10 @@ export default function App() {
         )}
 
         {aboutOpen && <AboutReviewDialog live={mode === 'live'} onClose={() => setAboutOpen(false)} onUnlock={() => { setAboutOpen(false); setUnlockOpen(true) }} />}
-        {unlockOpen && <UnlockDialog onClose={() => setUnlockOpen(false)} onDone={(n, e) => { setWho(n); setExpiresAt(e); setMode('live'); setUnlockOpen(false); setToast(null); setAssetMsg('') }} />}
+        {unlockOpen && <UnlockDialog onClose={() => { setUnlockOpen(false); if (tourAfterUnlock.current) { tourAfterUnlock.current = false; setOnboard('ask') } }}
+          onDone={(n, e) => { setWho(n); setExpiresAt(e); setMode('live'); setUnlockOpen(false); setToast(null); setAssetMsg(''); if (tourAfterUnlock.current) { tourAfterUnlock.current = false; startTour() } }} />}
+        {onboard === 'ask' && <Welcome onYes={() => { tourAfterUnlock.current = true; setOnboard(null); setUnlockOpen(true) }} onNo={startTour} onSkip={skipIntro} />}
+        {onboard === 'tour' && plan && <Tour live={mode === 'live'} onDone={endTour} />}
         {toast && (
           <div className="toast" role="status">{toast.text}{toast.undo && <button className="link" onClick={undo}>Undo</button>}{toast.code && <button className="link" onClick={() => { setToast(null); setUnlockOpen(true) }}>Enter code</button>}</div>
         )}

@@ -33,6 +33,37 @@ export function Flyout({ title, onClose, children, wide }: { title: string; onCl
   )
 }
 
+// Where the facts and pictures came from: the AI's research pages, then each segment's image or 3D model with its credit.
+type Credit = { title?: string; name?: string; author?: string; license?: string; source?: string }
+export function SourcesPanel({ plan, assets }: { plan: Plan; assets: ({ url: string } & Credit)[] }) {
+  const credit = (url: string): Credit | undefined => plan.credits?.find((c) => c.asset === url) ?? assets.find((a) => a.url === url)
+  const host = (u?: string) => { try { return u ? new URL(u).hostname.replace(/^www\./, '') : '' } catch { return '' } }
+  const media = plan.scenes.flatMap((s, i) => [
+    ...(s.asset ? [{ key: `a${i}`, i, img: s.asset, c: credit(s.asset) }] : []),
+    ...(s.model ? [{ key: `m${i}`, i, img: '', c: { title: s.model.title, license: s.model.license, source: s.model.source, author: s.model.credit } }] : []),
+  ])
+  return (
+    <div className="sources">
+      <h3>Research</h3>
+      {plan.sourcesNote && <p className="tip">{plan.sourcesNote}</p>}
+      {plan.sources?.length ? <ol className="src-list">{plan.sources.map((s) => (
+        <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer noopener">{s.title}</a><small>{host(s.url)}</small></li>
+      ))}</ol> : <p className="tip">No research links for this video. New videos list the pages the AI read.</p>}
+      <h3>Images & 3D</h3>
+      {media.length ? <ul className="src-media">{media.map(({ key, i, img, c }) => (
+        <li key={key}>
+          {img ? <img src={img} alt="" loading="lazy" /> : <span className="src-3d">3D</span>}
+          <div>
+            <b>Segment {i + 1} · {c?.title || c?.name || 'Untitled'}</b>
+            <small>{[c?.author, c?.license].filter(Boolean).join(' · ') || 'Credit unknown'}</small>
+            {c?.source ? <a href={c.source} target="_blank" rel="noreferrer noopener">{host(c.source) || 'Source'} ↗</a> : <small>Uploaded or no source page</small>}
+          </div>
+        </li>
+      ))}</ul> : <p className="tip">No images or 3D models on the storyboard yet.</p>}
+    </div>
+  )
+}
+
 // The whole script in order. It edits the same scene fields as the inspector, so the two can't drift apart.
 export function ScriptPanel({ plan, change, sel, onSelect }: Edit & { sel: number | null; onSelect: (i: number) => void }) {
   const times = spans(plan)

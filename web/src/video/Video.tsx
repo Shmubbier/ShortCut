@@ -28,6 +28,9 @@ export type Plan = {
   music?: Track | null; musicOptions?: string[]; musicWhy?: string; styleOptions?: Style[]; styleWhy?: string
   contentStyle?: string // content_styles.py id: explainer, story, listicle, clip, tutorial, showcase, news, comedy, documentary or custom
   exportUrl?: string // demo plans: a pre-rendered MP4
+  sources?: { title: string; url: string }[] // pages the AI read for the script (Sources tab)
+  sourcesNote?: string
+  credits?: { asset: string; title: string; author?: string; license?: string; source?: string }[] // image credits baked into demo plans
   scenes: SceneData[]
 }
 

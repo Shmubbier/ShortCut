@@ -136,11 +136,34 @@ def _ddg(q, limit):
         print("asset search ddg:",repr(e)[:180]); return []
 
 
+STOP = set("the and for with from about into what why how are was its this that video short reel some most best top facts story "
+           "history guide explained explainer love make made".split())
+
+
+def keywords(q: str) -> list:
+    return [w for w in dict.fromkeys(re.findall(r"[a-z0-9]+", q.lower())) if len(w) > 2 and w not in STOP]
+
+
+def on_topic(cands, q, text=lambda c: f"{c['title']} {urllib.parse.unquote(c['source_page'])}"):
+    """Keep candidates whose title/page mention every core word of the topic, best matches first. Core words are the
+    keywords that appear in at least half as many candidates as the most common one: "kenny rogers" needs both words,
+    "why filipinos love ube" just "ube" (titles say "Philippines", not "Filipinos")."""
+    words = keywords(q)
+    if not words: return list(cands)
+    texts = [text(c).lower() for c in cands]
+    df = {w: sum(w in t for t in texts) for w in words}
+    top = max(df.values())
+    if not top: return []
+    core = [w for w in words if df[w] * 2 >= top]
+    keep = [(sum(w in t for w in words), c) for c, t in zip(cands, texts) if all(w in t for w in core)]
+    return [c for _, c in sorted(keep, key=lambda x: -x[0])]
+
+
 def search(query, kinds=("image","video","model"), limit=8):
     """Search independent public sources concurrently; return normalized, un-downloaded candidates."""
     q=" ".join(str(query).split())[:160]
     if not q: raise ValueError("Type a topic to search for assets")
-    limit=max(1,min(int(limit),20)); variants=list(dict.fromkeys([q, q+" objects places", q.split()[0] if q.split() else q]))
+    limit=max(1,min(int(limit),20)); variants=[q]  # no single-word / padded variants: they pulled in "Sean Kenny" for "kenny rogers"
     tasks=[]
     for kind in kinds:
         if kind not in ("image","video","model"): continue
@@ -163,6 +186,8 @@ def search(query, kinds=("image","video","model"), limit=8):
     except concurrent.futures.TimeoutError:
         print("asset_search: slow sources skipped:", sorted({futures[f][1] for f in futures if not f.done()}), flush=True)
     pool.shutdown(wait=False, cancel_futures=True)
+    media=on_topic([c for c in results if c["kind"]!="model"], q)  # Polyfork models keep their own strict matcher
+    results=media+[c for c in results if c["kind"]=="model"]
     buckets={}; seen=set()
     for c in results:
         k=(c["kind"],c["url"])

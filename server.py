@@ -145,11 +145,31 @@ class Direction(BaseModel):
     music_why: str
 
 
+class Source(BaseModel):
+    title: str
+    url: str
+
+
 class Script(BaseModel):
     title: str
     direction: Direction
     scenes: list[Scene]
+    sources: list[Source]  # web pages actually opened for facts; [] if none
     note: str  # one short sentence to the user about what you did
+
+
+SOURCES_GUIDE = """`sources`: up to 6 web pages you actually opened for facts in this script (page title + full https URL).
+Never invent or guess a URL; return [] if you used no pages. For edits, list only pages you opened for this edit."""
+
+
+def clean_sources(*lists) -> list:
+    out, seen = [], set()
+    for src in (x for xs in lists for x in xs or []):
+        d = src.model_dump() if isinstance(src, BaseModel) else dict(src)
+        url = str(d.get("url", "")).strip()
+        if url.startswith("https://") and url not in seen:
+            seen.add(url); out.append({"title": str(d.get("title") or url)[:140], "url": url[:500]})
+    return out[:8]
 
 
 class FootageScene(Scene):
@@ -567,6 +587,7 @@ Research notes (may be empty; prefer concrete facts and numbers from here):
 {bucket_text(body.get('assets', []))}
 {style_text(meta['style'])}
 {model_guide(custom)}
+{SOURCES_GUIDE}
 Follow the content style's structure (the hook and payoff take the form it describes). Headlines short. No hashtags, no emojis.""", Script, research=True)
     d = s.direction
     if meta["style"] != "auto":  # respect a style the user picked even if the model drifted
@@ -575,7 +596,7 @@ Follow the content style's structure (the hook and payoff take the form it descr
         d = d.model_copy(update={"content_style": chosen["id"]})
     scenes, prop_note = resolve_models([to_scene(x) | {"model_query": x.model_query, "model_want": x.model_want} for x in s.scenes], custom, d.style)
     return {"title": s.title, **meta, **direction_fields(d), "scenes": scenes,
-            "research": notes, "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why}){prop_note}"}
+            "research": notes, "sources": clean_sources(s.sources), "note": f"{s.note} Style: {d.style} ({d.style_why}) Music: {MUSIC_BY_ID[d.music]['title']} ({d.music_why}){prop_note}"}
 
 
 def edit(body: dict) -> dict:
@@ -611,6 +632,7 @@ Return the revised segment. Keep every field the instruction doesn't ask to chan
 {bucket_text(body.get('assets', []))}
 {DIRECTION_GUIDE}
 {model_guide(custom)}
+{SOURCES_GUIDE}
 
 Apply this instruction to the video: "{instr}"
 Leave segments the instruction doesn't concern exactly as they are (prop_json "keep" for unchanged props).
@@ -623,7 +645,8 @@ Add, remove or reorder segments only if asked.""", Script)
     scenes = [to_scene(x, old[k] if k < len(old) and len(s.scenes) == len(old) else None) for k, x in enumerate(s.scenes)]
     vol = (plan.get("music") or {}).get("volume", 0.5)
     scenes, prop_note = resolve_models([sc | {"model_query": src.model_query, "model_want": src.model_want} for sc, src in zip(scenes, s.scenes)], custom, s.direction.style)
-    out = {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes}
+    out = {**plan, **direction_fields(s.direction, vol), "title": s.title, "scenes": scenes,
+           "sources": clean_sources(plan.get("sources"), s.sources)}
     if restyle:
         out = {**out, "contentStyle": restyle["id"], **cstyles.plan_settings(restyle)}
         if (restyle.get("visual") or {}).get("palette"):  # the reference's measured colours come with the style
@@ -898,8 +921,9 @@ def find_images(query: str, limit: int = 8) -> list:
         except Exception as e:
             print("image search failed:", repr(e)[:160])
             return []
-        return [(5, h["image"], h.get("title") or query, h.get("url", ""), h.get("source") or urlparse(h.get("url", "")).netloc.removeprefix("www."))
+        rows = [(5, h["image"], h.get("title") or query, h.get("url", ""), h.get("source") or urlparse(h.get("url", "")).netloc.removeprefix("www."))
                 for h in hits if h.get("image") and not urlparse(h["image"]).path.lower().endswith((".svg", ".gif"))]
+        return asset_search.on_topic(rows, query, text=lambda r: f"{r[2]} {unquote(r[3])} {unquote(r[1])}")  # drop off-topic thumbnails
 
     def candidates(page: str) -> list:
         try:
