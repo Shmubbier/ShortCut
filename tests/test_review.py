@@ -17,6 +17,18 @@ PAST = "2000-01-01T00:00:00+00:00"
 BAD = "That code isn't valid or has expired"
 
 
+class AdminCodeTest(unittest.TestCase):
+    def test_admin_code(self):
+        with mock.patch.dict(os.environ, {"REVIEWER_CODE": "abc", "ADMIN_REVIEW_CODE": "own", "REVIEW_EXPIRES_AT": FUTURE}):
+            review._reset()
+            self.assertEqual(review.check("own", "Naomi", "c-admin"), (True, "Admin · Naomi"))
+            self.assertEqual(review.check("abc", "Maria", "c-admin"), (True, "Maria"))
+            self.assertTrue(review.is_admin_code("own"))
+            self.assertFalse(review.is_admin_code("abc"))
+        with mock.patch.dict(os.environ, {"ADMIN_REVIEW_CODE": ""}):
+            self.assertFalse(review.is_admin_code(""))  # unset never matches an empty code
+
+
 class ReviewTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

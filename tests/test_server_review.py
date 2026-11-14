@@ -179,6 +179,19 @@ class ServerReviewTest(unittest.TestCase):
             self.assertEqual(self.req("GET", "/api/assets", headers=h)[0], 200)
             self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 200)
 
+    def test_admin_code_unlocks_tagged_and_skips_cap(self):
+        h = {"X-Reviewer-Code": "owner-code-123", "X-Reviewer-Name": "Naomi"}
+        with mock.patch.dict(os.environ, {"ADMIN_REVIEW_CODE": "owner-code-123", "REVIEW_DAILY_CAP": "1"}):
+            s, t, _ = self.req("POST", "/api/session", {"code": "owner-code-123", "name": "Naomi"})
+            self.assertEqual((s, json.loads(t)["name"]), (200, "Admin · Naomi"))
+            self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 200)
+            self.assertEqual(self.req("POST", "/api/plan", {}, h)[0], 200)  # over the cap of 1, still allowed
+        self.assertEqual(review.read_log()[0]["name"], "Admin · Naomi")
+
+    def test_panelist_code_cannot_claim_admin_label(self):
+        s, _, _ = self.req("POST", "/api/session", {"code": "test-code", "name": "Admin · Maria"})
+        self.assertEqual(s, 401)
+
     def test_expired_window_locks(self):
         h = {"X-Reviewer-Code": "test-code", "X-Reviewer-Name": "Maria"}
         past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
@@ -210,6 +223,7 @@ class GateInactiveTest(ServerReviewTest):
     test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
     test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
     test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+    test_admin_code_unlocks_tagged_and_skips_cap = test_panelist_code_cannot_claim_admin_label = None
 
 
 class HostedNoCodeTest(ServerReviewTest):
@@ -240,6 +254,7 @@ class HostedNoCodeTest(ServerReviewTest):
     test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
     test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
     test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+    test_admin_code_unlocks_tagged_and_skips_cap = test_panelist_code_cannot_claim_admin_label = None
 
 
 class LaptopPortTest(ServerReviewTest):
@@ -271,6 +286,7 @@ class LaptopPortTest(ServerReviewTest):
     test_footage_gated = test_cap_returns_429 = test_admin_requires_code_and_escapes = None
     test_shots_without_blender_not_counted = test_admin_cookie_attributes = test_admin_wrong_code = test_admin_survives_corrupt_log = test_csv = None
     test_admin_limiter = test_limiter_ignores_spoofed_first_hop = test_assets_list_does_not_use_cap = test_expired_window_locks = None
+    test_admin_code_unlocks_tagged_and_skips_cap = test_panelist_code_cannot_claim_admin_label = None
 
 
 class MediaTest(unittest.TestCase):

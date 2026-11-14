@@ -1351,7 +1351,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
                 self.reply({"error": "3D shots aren't available on the hosted version"}, 400)
                 return False
-        capped = ok and path in SPEND and not review.allow_action()
+        capped = ok and path in SPEND and not review.is_admin_code(self.headers.get("X-Reviewer-Code", "")) and not review.allow_action()
         if not ok or capped:
             # Drain the unread body first: closing a socket with unread data resets the connection and the client loses the reply.
             self.rfile.read(min(int(self.headers.get("Content-Length", 0) or 0), 1_000_000))
