@@ -79,6 +79,33 @@ function UnlockDialog({ onClose, onDone }: { onClose: () => void; onDone: (name:
   )
 }
 
+// "What is this?": why the site runs as a demo and what the reviewer code unlocks.
+function AboutReviewDialog({ onClose, onUnlock, live }: { onClose: () => void; onUnlock: () => void; live: boolean }) {
+  return (
+    <div className="unlock-back" onClick={onClose}>
+      <div className="unlock about-review" role="dialog" aria-label="About demo mode and reviewer access" onClick={(e) => e.stopPropagation()}>
+        <h2>What is this?</h2>
+        <p><b>ShortCut</b> turns a topic into a researched, voiced, editable short video: script, storyboard, photos, 3D models, captions and export.</p>
+        <h3>Demo mode (everyone)</h3>
+        <p>The site always works without our server. You can open three ready-made videos, built with the same pipeline, and use the full editor: timeline, styles, themes and playback.</p>
+        <h3>Live mode (Manila Hack panelists)</h3>
+        <p>Enter the reviewer code from our email to generate new videos on any topic, edit with AI, record voiceovers and export MP4s.</p>
+        <h3>Why it works this way</h3>
+        <ul>
+          <li><b>Always available:</b> the demo is hosted on its own, so the link works even if the live server is asleep or down.</li>
+          <li><b>Real AI costs real credits:</b> live generation runs on a server signed in to our AI account, so it's limited to reviewers with a code.</li>
+          <li><b>Fair and transparent:</b> each live action is logged with the name you enter (no IP addresses), and there's a daily limit.</li>
+          <li><b>Time-limited:</b> live access ends automatically after the one-week review, and the server removes its AI sign-in.</li>
+        </ul>
+        <div className="unlock-actions">
+          <button type="button" className="ghost" onClick={onClose}>Close</button>
+          {!live && <button type="button" className="primary" onClick={onUnlock}>Enter reviewer code</button>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
 // Starter prompts on the empty start screen: each fills the composer and picks a format.
@@ -170,6 +197,7 @@ export default function App() {
   const [previewIn, setPreviewIn] = useState(!!saved?.plan)
   const [mode, setMode] = useState<Mode>('demo') // 'demo': ready videos, no backend; 'live': unlocked with a reviewer code
   const [unlockOpen, setUnlockOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [expiresAt, setExpiresAt] = useState('')
   const [who, setWho] = useState('')
   const [demoMiss, setDemoMiss] = useState<DemoIndex | null>(null) // topic matched no demo video: offer the ones we have
@@ -690,7 +718,11 @@ export default function App() {
           <header>
             <b>{plan?.title ?? 'Generating…'}</b>
             {plan?.contentStyle && <span className="chip" title="Content style: ask the assistant to change it, e.g. 'make it a story'">{contentStyles.find((c) => c.id === plan.contentStyle)?.label ?? plan.contentStyle}</span>}
-            {liveChip || <button className="ghost" onClick={() => setUnlockOpen(true)}>Reviewer access</button>}
+            {liveChip || <>
+              <span className="demo-badge" title="Live generation needs a reviewer code">Demo mode · reviewer access required</span>
+              <button className="primary review-btn-sm" onClick={() => setUnlockOpen(true)}>Reviewer access</button>
+              <button className="what-link" onClick={() => setAboutOpen(true)}>What is this?</button>
+            </>}
             <button className="ghost" onClick={undo} disabled={!history.length}>Undo</button>
             <button className="ghost" onClick={newProject} disabled={!!gen}>New video</button>
           </header>
@@ -723,6 +755,16 @@ export default function App() {
               <h1>{greeting()}</h1>
             </div>
             <p className="welcome-sub">What video should we make today? ShortCut researches it, writes the script, builds the storyboard and voices it.</p>
+            {mode === 'demo' && (
+              <div className="review-bar" role="region" aria-label="Reviewer access">
+                <span className="demo-badge">Demo mode · reviewer access required</span>
+                <div className="review-bar-main">
+                  <button className="primary review-btn" onClick={() => setUnlockOpen(true)}>Reviewer access</button>
+                  <p className="review-sub">Manila Hack panelists: enter the code from our email to unlock live AI generation, voiceover and MP4 export. Without it, try a ready-made demo: ask about ube, jeepneys or tower defense games.</p>
+                </div>
+                <button className="link review-what" onClick={() => setAboutOpen(true)}>What is this?</button>
+              </div>
+            )}
             <div className="composer">
             <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={3} autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
@@ -764,7 +806,7 @@ export default function App() {
             <label className="hero-footage">or start from your own video clip
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
-            {liveChip || <button className="link reviewer-link" onClick={() => setUnlockOpen(true)}>Reviewer access</button>}
+            {liveChip && <div className="review-live">{liveChip}</div>}
             {heroError && <p className="err">{heroError}</p>}
             {demoMiss && <div className="starters">{demoMiss.plans.map((d) => <button key={d.file} onClick={() => { setDemoMiss(null); generate(d.title, d) }}><b>{d.title}</b></button>)}</div>}
             </>
@@ -823,6 +865,7 @@ export default function App() {
           </div>
         )}
 
+        {aboutOpen && <AboutReviewDialog live={mode === 'live'} onClose={() => setAboutOpen(false)} onUnlock={() => { setAboutOpen(false); setUnlockOpen(true) }} />}
         {unlockOpen && <UnlockDialog onClose={() => setUnlockOpen(false)} onDone={(n, e) => { setWho(n); setExpiresAt(e); setMode('live'); setUnlockOpen(false); setToast(null); setAssetMsg('') }} />}
         {toast && (
           <div className="toast" role="status">{toast.text}{toast.undo && <button className="link" onClick={undo}>Undo</button>}{toast.code && <button className="link" onClick={() => { setToast(null); setUnlockOpen(true) }}>Enter code</button>}</div>
