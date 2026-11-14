@@ -29,6 +29,18 @@ class AdminCodeTest(unittest.TestCase):
             self.assertFalse(review.is_admin_code(""))  # unset never matches an empty code
 
 
+class GuestCodeTest(unittest.TestCase):
+    def test_guest_code_tagged(self):
+        env = {"REVIEWER_CODE": "abc", "ADMIN_REVIEW_CODE": "own", "GUEST_REVIEW_CODES": "Peter=pete123; Bad=;=x", "REVIEW_EXPIRES_AT": FUTURE}
+        with mock.patch.dict(os.environ, env):
+            review._reset()
+            self.assertEqual(review.check("pete123", "Peter S", "g1"), (True, "Peter · Peter S"))
+            self.assertEqual(review.check("abc", "Peter · fake", "g1")[0], False)
+            self.assertEqual(review.check("", "Maria", "g2"), (False, BAD))
+            self.assertEqual(review.guest_label(""), "")
+            self.assertFalse(review.is_admin_code("pete123"))
+
+
 class ReviewTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

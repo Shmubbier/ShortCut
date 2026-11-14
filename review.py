@@ -77,6 +77,16 @@ def is_admin_code(code: str) -> bool:
     return bool(admin) and hmac.compare_digest((code or "").encode(), admin.encode())
 
 
+def guest_label(code: str) -> str:
+    """GUEST_REVIEW_CODES="Peter=code1;Other=code2": personal codes whose visits are logged as "Peter · name"."""
+    found = ""
+    for pair in os.environ.get("GUEST_REVIEW_CODES", "").split(";"):
+        label, _, secret = pair.partition("=")
+        if label.strip() and secret.strip() and hmac.compare_digest((code or "").encode(), secret.strip().encode()):
+            found = label.strip()[:20]
+    return found
+
+
 def check(code: str, name: str, client: str):
     clean = (name or "").strip()
     if not 2 <= len(clean) <= 40:
@@ -88,13 +98,14 @@ def check(code: str, name: str, client: str):
         if until:  # lock elapsed
             count = 0
         admin = is_admin_code(code)
-        if not admin and clean.startswith(ADMIN_TAG):  # the admin label can't be claimed with the panelists' code
+        guest = "" if admin else guest_label(code)
+        if not admin and "·" in clean:  # code labels ("Admin · ", "Peter · ") can't be typed in by hand
             return False, "Enter your name (2-40 characters)"
-        ok = is_open() and (admin or hmac.compare_digest(
+        ok = is_open() and (admin or bool(guest) or hmac.compare_digest(
             (code or "").encode(), os.environ.get("REVIEWER_CODE", "").encode()))
         if ok:
             _fails.pop(client, None)
-            return True, (ADMIN_TAG + clean if admin else clean)
+            return True, (ADMIN_TAG + clean if admin else f"{guest} · {clean}" if guest else clean)
         count += 1
         _fails[client] = (count, time.monotonic() + LOCK_SECONDS if count >= MAX_TRIES else 0.0)
     return False, BAD_CODE
