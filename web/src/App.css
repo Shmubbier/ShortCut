@@ -1,4 +1,4 @@
-:root { --paper: #f3ece0; --paper2: #e9e0d0; --ink: #1d1d1b; --accent: #e8432e; --blue: #2b4bd6; --muted: #6b665d;
+:root { --btn-radius: 10px; --btn-pad: 8px 16px; --btn-font: 13px; --btn-weight: 700; --btn-border: 1.5px; --paper: #f3ece0; --paper2: #e9e0d0; --ink: #1d1d1b; --accent: #e8432e; --blue: #2b4bd6; --muted: #6b665d;
   --card: #fff8ef; --card2: #fffaf2; --ink-rgb: 29, 29, 27; color-scheme: light; }
 /* Dark mode mockup: warm charcoal instead of paper, cream ink, the same red accent a touch brighter.
    The video frames keep their own palettes (they are the output, not the editor). */
@@ -53,7 +53,7 @@ aside { display: flex; flex-direction: column; border-right: 2px solid var(--ink
 .composer { border-top: 2px solid var(--ink); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .scope { display: flex; align-items: center; gap: 4px; }
 .composer textarea { resize: none; border: 1.5px solid var(--ink); border-radius: 8px; padding: 8px 10px; font: inherit; background: var(--card); }
-.composer > button, header button:not(.ghost) { background: var(--accent); color: #fff; border: 0; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
+.composer > button, header button:not(.ghost):not(.link):not(.what-link):not(.x):not(.collapse) { background: var(--accent); color: #fff; border: var(--btn-border) solid var(--accent); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 
 .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 8px; background: var(--card); }
 .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -63,7 +63,8 @@ aside { display: flex; flex-direction: column; border-right: 2px solid var(--ink
 main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--paper); }
 header { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 2px solid var(--ink); background: var(--paper); }
 header b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-header select, .ghost { border: 1.5px solid var(--ink); background: var(--card); border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+header select { border: 1.5px solid var(--ink); background: var(--card); border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+.ghost { border: var(--btn-border) solid var(--ink); background: transparent; color: var(--ink); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 .stage { height: 42vh; max-width: 92%; margin: 16px auto; border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); background: #000; flex: 0 0 auto; }
 .canvas { flex: 1; min-height: 0; position: relative; overflow: hidden; cursor: grab; touch-action: none; user-select: none; border-top: 2px solid var(--ink);
   background: var(--paper2) radial-gradient(circle, rgba(var(--ink-rgb), .18) 1px, transparent 1.2px); }
@@ -96,7 +97,7 @@ header select, .ghost { border: 1.5px solid var(--ink); background: var(--card);
 .asset-add { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .asset-add form { display: flex; gap: 6px; }
 .asset-add input { flex: 1; min-width: 0; border: 1.5px solid var(--ink); border-radius: 8px; padding: 6px 8px; background: var(--card); font: inherit; font-size: 13px; }
-.asset-add button, .upload { border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 13px; text-align: center; cursor: pointer; }
+.asset-add button, .upload { border: var(--btn-border) solid var(--ink); background: var(--ink); color: var(--paper); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); text-align: center; cursor: pointer; }
 .grid.assets { max-height: 230px; overflow: auto; min-height: 80px; }
 .fx.asset { position: relative; padding: 4px; }
 .fx.asset img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; pointer-events: none; }
@@ -118,8 +119,10 @@ header select, .ghost { border: 1.5px solid var(--ink); background: var(--card);
 .inspector input[type=color] { width: 100%; height: 32px; border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px; background: var(--card); }
 .inspector .row { display: flex; gap: 8px; align-items: flex-end; }
 .inspector .row audio { flex: 1; height: 32px; min-width: 0; }
-.inspector button:not(.link):not(.sw) { background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 13px; }
-.link { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 700; font-size: 12px; text-align: left; }
+.inspector button:not(.link):not(.sw) { background: var(--ink); color: var(--paper); border: var(--btn-border) solid var(--ink); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
+.link, button.what-link, header button.what-link { background: none; border: 0; box-shadow: none; padding: 2px 0; color: var(--accent); font-weight: var(--btn-weight); font-size: var(--btn-font);
+  text-align: left; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; cursor: pointer; }
+.link:hover, .what-link:hover { text-decoration-thickness: 2.5px; }
 .seghead { display: flex; flex-direction: column; gap: 4px; }
 .seghead small, .tip { color: var(--muted); }
 .err { color: #b00020; font-size: 12px; margin: 0; }
@@ -195,11 +198,11 @@ header select, .ghost { border: 1.5px solid var(--ink); background: var(--card);
 .unlock input { background: var(--paper); color: var(--ink); border: 1px solid var(--muted); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
 .unlock .err { margin: 0; }
 .unlock-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.unlock-actions button[type=submit] { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; }
+.unlock-actions button[type=submit] { background: var(--accent); color: #fff; border: var(--btn-border) solid var(--accent); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 .live-chip { font-size: 12px; color: var(--ink); background: var(--card); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; display: inline-flex; gap: 8px; align-items: center; }
 .reviewer-link { margin-top: 4px; }
 /* Reviewer access: prominent in demo mode (start screen bar + editor header), "What is this?" explainer */
-button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 10px; font-weight: 800; cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border: var(--btn-border) solid var(--accent); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); cursor: pointer; }
 button.primary:hover { filter: brightness(1.06); }
 .demo-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink);
   background: var(--card); border: 1.5px dashed var(--accent); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
@@ -207,15 +210,12 @@ button.primary:hover { filter: brightness(1.06); }
 .review-bar { display: grid; gap: 10px; justify-items: center; text-align: center; border: 1.5px solid var(--accent); border-radius: 16px;
   background: var(--card); padding: 14px 16px; margin: 4px 0 6px; }
 .review-bar-main { display: flex; align-items: center; gap: 14px; text-align: left; }
-.review-btn { padding: 12px 20px; font-size: 16px; white-space: nowrap; box-shadow: 0 4px 14px rgba(232, 67, 46, .3); }
+.review-btn { padding: 12px 22px; font-size: 15px; white-space: nowrap; box-shadow: 0 4px 14px rgba(232, 67, 46, .3); }
 .review-sub { margin: 0; font-size: 13px; color: var(--muted); max-width: 420px; }
 .review-what { font-size: 13px; }
-.review-btn-sm { padding: 6px 12px; font-size: 13px; }
 .review-live { display: flex; justify-content: center; }
 @media (max-width: 640px) { .review-bar-main { flex-direction: column; text-align: center; } }
 .about-review { width: min(540px, 100%); max-height: 85vh; overflow: auto; }
 .about-review h3 { margin: 6px 0 0; font-size: 14px; }
 .about-review p, .about-review li { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .about-review ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
-.about-review .primary { padding: 8px 14px; }
-header button.what-link, button.what-link { background: transparent; border: 0; box-shadow: none; color: var(--accent); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 4px 2px; cursor: pointer; }

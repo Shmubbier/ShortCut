@@ -48,7 +48,7 @@
 :is(.inspector, .flyout-body) :is(input:not([type=checkbox]):not([type=range]):not([type=color]), select, textarea) { border: 1.5px solid var(--ink); border-radius: 8px; padding: 6px 8px; font: inherit; font-weight: 400; font-size: 13px; background: var(--card); resize: vertical; }
 :is(.inspector, .flyout-body) input[type=color] { width: 100%; height: 32px; border: 1.5px solid var(--ink); border-radius: 8px; padding: 2px; background: var(--card); }
 :is(.inspector, .flyout-body) .row { display: flex; gap: 8px; align-items: flex-end; }
-:is(.inspector, .flyout-body) button:not(.link):not(.sw):not(.fx):not(.rec):not(.x):not(.ghost):not(.collapse):not(.danger) { background: var(--ink); color: var(--paper); border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700; font-size: 13px; }
+:is(.inspector, .flyout-body) button:not(.link):not(.sw):not(.fx):not(.rec):not(.x):not(.ghost):not(.collapse):not(.danger):not([aria-pressed]):not(.import-icon):not(.del) { background: var(--ink); color: var(--paper); border: var(--btn-border) solid var(--ink); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 .flyout-body .rec { background: var(--card); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
 .flyout-body .rec.on { background: var(--ink); color: var(--paper); }
 .flyout-body .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -93,7 +93,7 @@
 @keyframes nudge { 0%, 100% { box-shadow: 3px 3px 0 var(--ink), 0 0 0 0 rgba(232, 67, 46, .5); } 50% { box-shadow: 3px 3px 0 var(--ink), 0 0 0 10px rgba(232, 67, 46, 0); } }
 .assist-panel { width: 340px; max-height: 52vh; display: flex; flex-direction: column; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; box-shadow: 6px 6px 0 var(--ink); overflow: hidden; animation: pop .22s ease-out; }
 .assist-panel .log { max-height: 30vh; }
-.assist-panel .composer > button { background: var(--accent); color: #fff; border: 0; padding: 8px 14px; border-radius: 8px; font-weight: 700; align-self: flex-end; }
+.assist-panel .composer > button { background: var(--accent); color: #fff; border: var(--btn-border) solid var(--accent); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); align-self: flex-end; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: none; } }
 
 /* Inspector: slides in, stays until collapsed */
@@ -105,7 +105,7 @@
 .seg-num { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
 .inspector input.seg-title { font-family: "Archivo Black", "Arial Black", sans-serif; font-size: 17px; border-color: transparent; background: transparent; padding: 2px 0; }
 .inspector input.seg-title:focus { border-color: var(--ink); background: var(--card); padding: 2px 6px; }
-.inspector button.danger { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 8px; padding: 6px 10px; font-weight: 700; font-size: 12px; }
+.inspector button.danger { background: transparent; color: var(--accent); border: var(--btn-border) solid var(--accent); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 .fill-box { border: 1.5px dashed var(--accent); border-radius: 10px; padding: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; background: #fff1e6; }
 .media-drop { border: 1.5px dashed var(--muted); border-radius: 10px; padding: 8px; min-height: 64px; display: grid; place-items: center; }
 .media-drop.over { border-color: var(--blue); background: #eef1ff; }
@@ -202,7 +202,7 @@
 .style-progress i { display: block; height: 6px; border-radius: 3px; background: var(--accent); transition: width .6s ease; }
 .hero-style { display: flex; flex-direction: column; gap: 6px; border-top: 1.5px dashed var(--ink); padding-top: 10px; }
 .hero-style input { border: 1.5px solid var(--ink); border-radius: 8px; padding: 7px 10px; font: inherit; background: var(--paper); }
-.hero-style button { border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 8px; padding: 7px 14px; font-weight: 700; }
+.hero-style button { border: var(--btn-border) solid var(--ink); background: var(--ink); color: var(--paper); border-radius: var(--btn-radius); padding: var(--btn-pad); font-weight: var(--btn-weight); font-size: var(--btn-font); }
 
 /* 3D models: thumbnail only (name on hover); no thumbnail -> cube icon; search results import with a + */
 .model-tile { padding: 4px; }
@@ -282,5 +282,16 @@
 .tour-count { color: var(--muted); font-weight: 700; }
 .tour-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 4px; }
 .tour-actions .link { margin-right: auto; }
+.tour-actions button, .welcome-choices button, .unlock-actions button, header button { white-space: nowrap; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(6px) } }
 .tour-link { margin-top: 6px; }
+
+/* Shared button states: every text button (not the rail, chips or round icon buttons) */
+:is(button.primary, button.ghost, button.danger, .unlock-actions button, .composer > button, header button, .asset-add button, .upload,
+  .hero-style button, .inspector button, .flyout-body button):not(.link):not(.what-link):not(.x):not(.sw):not(.fx) {
+  line-height: 1.2; transition: filter .15s ease, background-color .15s ease, transform .06s ease; }
+:is(button.primary, .unlock-actions button[type=submit], .composer > button, .asset-add button, .upload, .hero-style button):hover:not(:disabled) { filter: brightness(1.1); }
+button.ghost:hover:not(:disabled) { background: var(--card2); }
+button.danger:hover:not(:disabled) { background: rgba(232, 67, 46, .1); }
+button:active:not(:disabled):not(.rail-btn):not(.node *) { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
