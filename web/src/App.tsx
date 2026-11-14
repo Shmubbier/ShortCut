@@ -710,6 +710,7 @@ export default function App() {
   return (
     <div className={`studio ${started ? 'started' : ''}`}>
       {started ? <ThemeToggle /> : <ThemePill />}
+      {!started && <button className="ghost tour-btn" onClick={startTour}>Take the tour</button>}
       {started && (
         <nav className="rail" aria-label="Panels">
           <div className="rail-brand" title="ShortCut"><Logo size={34} /></div>
@@ -831,7 +832,6 @@ export default function App() {
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadClip(f, true); e.target.value = '' }} hidden /></label>
             {assetMsg && <p className="tip">{assetMsg}</p>}
             {liveChip && <div className="review-live">{liveChip}</div>}
-            <button className="link tour-link" onClick={startTour}>New here? Take the 1-minute tour</button>
             {heroError && <p className="err">{heroError}</p>}
             {demoMiss && <div className="starters">{demoMiss.plans.map((d) => <button key={d.file} onClick={() => { setDemoMiss(null); generate(d.title, d) }}><b>{d.title}</b></button>)}</div>}
             </>

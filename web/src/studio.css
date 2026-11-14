@@ -284,7 +284,7 @@
 .tour-actions .link { margin-right: auto; }
 .tour-actions button, .welcome-choices button, .unlock-actions button, header button { white-space: nowrap; }
 @keyframes pop-in { from { opacity: 0; transform: translateY(6px) } }
-.tour-link { margin-top: 6px; }
+.tour-btn { position: fixed; top: 16px; left: 16px; z-index: 50; background: var(--card); }
 
 /* Shared button states: every text button (not the rail, chips or round icon buttons) */
 :is(button.primary, button.ghost, button.danger, .unlock-actions button, .composer > button, header button, .asset-add button, .upload,
